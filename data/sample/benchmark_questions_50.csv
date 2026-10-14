@@ -1,0 +1,51 @@
+id,question,expected
+q01,What is the capital of Australia?,canberra
+q02,What is the largest planet in our solar system?,jupiter
+q03,How many days are there in a leap year?,366
+q04,What is the chemical symbol for gold?,au|gold
+q05,Who wrote Romeo and Juliet?,william shakespeare|shakespeare
+q06,What is 15 multiplied by 6?,90
+q07,Which ocean is the largest on Earth?,pacific ocean|pacific
+q08,What is the boiling point of water at sea level in degrees Celsius?,100|100 degrees celsius|100 celsius|100°c
+q09,What is the square root of 81?,9
+q10,Which country is famous for the Great Pyramid of Giza?,egypt
+q11,What type of object is the Sun?,star
+q12,Which planet is known as the Red Planet?,mars
+q13,What is the chemical formula for water?,h2o
+q14,What is the largest mammal on Earth?,blue whale
+q15,How many continents are there on Earth?,7|seven
+q16,What is 12 multiplied by 12?,144
+q17,What is 100 divided by 4?,25
+q18,What is 2 to the power of 10?,1024
+q19,What is the decimal value of the binary number 10?,2
+q20,What is the perimeter of a square with side length 5 units?,20
+q21,What is the chemical symbol for sodium?,na|sodium
+q22,Which planet is famous for its prominent ring system?,saturn
+q23,What is Earth's natural satellite called?,moon
+q24,What process do green plants use to convert light energy into chemical energy?,photosynthesis
+q25,Which gas do humans need for normal cellular respiration?,oxygen
+q26,Which organ pumps blood throughout the human body?,heart
+q27,What is the largest continent by area?,asia
+q28,What is the currency of Japan?,yen
+q29,What is the capital of Canada?,ottawa
+q30,What is the capital of Brazil?,brasilia|brasília
+q31,Who wrote the Harry Potter book series?,j.k. rowling|jk rowling|j k rowling|rowling
+q32,Who painted the Mona Lisa?,leonardo da vinci
+q33,Who was the first President of the United States?,george washington
+q34,The Great Wall is located in which country?,china
+q35,In what year did World War II end?,1945
+q36,How many days are there in one week?,7|seven
+q37,How many meters are in one kilometer?,"1000|1,000"
+q38,What is the sum of the interior angles of a triangle?,180|180 degrees
+q39,"Which is a prime number: 21, 23, or 25?",23
+q40,"What is the median of 3, 5, and 7?",5
+q41,What is 15 percent of 200?,30
+q42,"What is the average of 10, 20, and 30?",20
+q43,What is the area of a square with side length 8 units?,64
+q44,What is the opposite of negative 7?,7|positive 7
+q45,What percentage is three quarters?,75|75%|75 percent
+q46,What is the largest desert in the world by area?,antarctic desert|antarctica|antarctic
+q47,Which metal is liquid at room temperature?,mercury
+q48,What does DNA stand for?,deoxyribonucleic acid
+q49,What is the closest star to Earth?,sun|the sun
+q50,What is the SI unit of force?,newton|newtons

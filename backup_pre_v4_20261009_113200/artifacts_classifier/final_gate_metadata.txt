@@ -1,0 +1,44 @@
+LOCAL LLM RELIABILITY GATE - FINAL MODEL
+
+Model:
+ExtraTreesClassifier + sigmoid calibration
+
+Training data:
+Rows: 300
+Correct: 193
+Wrong: 107
+
+Features (15):
+- mean_logprob_avg
+- mean_logprob_std
+- mean_logprob_best
+- mean_logprob_worst
+- min_logprob_avg
+- min_logprob_std
+- min_logprob_best
+- min_logprob_worst
+- logprob_confidence_range
+- answer_agreement
+- consensus_margin
+- answer_key_entropy
+- answer_length_avg
+- answer_length_std
+- truncation_rate
+
+Deployment threshold:
+0.82
+
+Decision:
+P(correct) >= 0.82 -> TRUST
+P(correct) <  0.82 -> VERIFY
+
+Threshold source:
+Median of train-OOF-selected thresholds across seeds
+[42, 52, 62, 72, 82]
+
+Important:
+The benchmark's holdout results remain evaluation results.
+This final model is retrained on all labeled benchmark rows only
+after the operating threshold was fixed.
+
+This is a reliability/abstention gate, not a truth detector.

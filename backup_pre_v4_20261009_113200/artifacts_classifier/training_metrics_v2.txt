@@ -1,0 +1,58 @@
+LOCAL LLM RELIABILITY GATE V2
+============================================================
+Dataset rows: 300
+Training rows: 240
+Final test rows: 60
+Selected model: ExtraTrees
+Threshold: 0.740000
+Accuracy: 0.650000
+Precision: 0.950000
+Recall: 0.487179
+F1: 0.644068
+ROC-AUC: 0.869353
+Brier: 0.160120
+Coverage: 0.333333
+Trusted accuracy: 0.950000
+
+Features:
+- mean_logprob_avg
+- mean_logprob_std
+- mean_logprob_best
+- mean_logprob_worst
+- min_logprob_avg
+- min_logprob_std
+- min_logprob_best
+- min_logprob_worst
+- logprob_confidence_range
+- answer_agreement
+- consensus_margin
+- answer_key_entropy
+- answer_length_avg
+- answer_length_std
+- truncation_rate
+
+Cross-validation:
+
+LogisticRegression
+Accuracy: 0.654167
+Accuracy std: 0.031180
+ROC-AUC: 0.693627
+F1: 0.728078
+
+RandomForest
+Accuracy: 0.675000
+Accuracy std: 0.025000
+ROC-AUC: 0.725220
+F1: 0.741176
+
+ExtraTrees
+Accuracy: 0.679167
+Accuracy std: 0.031180
+ROC-AUC: 0.749159
+F1: 0.731419
+
+HistGradientBoosting
+Accuracy: 0.662500
+Accuracy std: 0.040397
+ROC-AUC: 0.676951
+F1: 0.742414

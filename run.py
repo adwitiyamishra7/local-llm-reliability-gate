@@ -1,0 +1,11 @@
+from __future__ import annotations
+
+import subprocess
+import sys
+
+
+if __name__ == "__main__":
+    subprocess.run(
+        [sys.executable, "scripts/smoke_test.py"],
+        check=True,
+    )

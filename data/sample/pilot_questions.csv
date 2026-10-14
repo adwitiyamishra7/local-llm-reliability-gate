@@ -1,0 +1,11 @@
+id,question,expected_answers
+q01,What is the capital of Australia?,canberra
+q02,What is the largest planet in our solar system?,jupiter
+q03,How many days are there in a leap year?,366
+q04,What is the chemical symbol for gold?,au|gold
+q05,Who wrote Romeo and Juliet?,william shakespeare|shakespeare
+q06,What is 15 multiplied by 6?,90
+q07,Which ocean is the largest on Earth?,pacific ocean|pacific
+q08,What is the boiling point of water at sea level in degrees Celsius?,100|100 degrees celsius
+q09,What is the square root of 81?,9
+q10,Which country is famous for the Great Pyramid of Giza?,egypt

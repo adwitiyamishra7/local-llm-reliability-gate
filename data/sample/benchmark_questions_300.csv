@@ -1,0 +1,301 @@
+id,question,expected,category,difficulty
+q001,What is the capital of Australia?,canberra,geography,easy
+q002,What is the largest planet in our solar system?,jupiter,science,easy
+q003,How many days are there in a leap year?,366,math,easy
+q004,What is the chemical symbol for gold?,au|gold,science,easy
+q005,Who wrote Romeo and Juliet?,william shakespeare|shakespeare,literature,easy
+q006,What is 15 multiplied by 6?,90,math,easy
+q007,Which ocean is the largest on Earth?,pacific ocean|pacific,geography,easy
+q008,What is the boiling point of water at sea level in degrees Celsius?,100|100 degrees celsius|100 celsius|100°c,science,easy
+q009,What is the square root of 81?,9,math,easy
+q010,Which country is famous for the Great Pyramid of Giza?,egypt,geography,easy
+q011,What type of object is the Sun?,star,science,easy
+q012,Which planet is known as the Red Planet?,mars,science,easy
+q013,What is the chemical formula for water?,h2o,science,easy
+q014,What is the largest mammal on Earth?,blue whale,science,easy
+q015,How many continents are there on Earth?,7|seven,geography,easy
+q016,What is 12 multiplied by 12?,144,math,easy
+q017,What is 100 divided by 4?,25,math,easy
+q018,What is 2 to the power of 10?,1024,computing,easy
+q019,What is the decimal value of the binary number 10?,2,math,easy
+q020,What is the perimeter of a square with side length 5 units?,20,math,easy
+q021,What is the chemical symbol for sodium?,na|sodium,science,easy
+q022,Which planet is famous for its prominent ring system?,saturn,science,easy
+q023,What is Earth's natural satellite called?,moon,science,easy
+q024,What process do green plants use to convert light energy into chemical energy?,photosynthesis,science,easy
+q025,Which gas do humans need for normal cellular respiration?,oxygen,science,easy
+q026,Which organ pumps blood throughout the human body?,heart,science,easy
+q027,What is the largest continent by area?,asia,geography,easy
+q028,What is the currency of Japan?,yen,geography,easy
+q029,What is the capital of Canada?,ottawa,geography,easy
+q030,What is the capital of Brazil?,brasilia|brasília,geography,easy
+q031,Who wrote the Harry Potter book series?,j.k. rowling|jk rowling|j k rowling|rowling,literature,easy
+q032,Who painted the Mona Lisa?,leonardo da vinci,art,easy
+q033,Who was the first President of the United States?,george washington,history,easy
+q034,The Great Wall is located in which country?,china,geography,easy
+q035,In what year did World War II end?,1945,history,easy
+q036,How many days are there in one week?,7|seven,math,easy
+q037,How many meters are in one kilometer?,"1000|1,000",math,easy
+q038,What is the sum of the interior angles of a triangle?,180|180 degrees,math,easy
+q039,"Which is a prime number: 21, 23, or 25?",23,math,easy
+q040,"What is the median of 3, 5, and 7?",5,math,easy
+q041,What is 15 percent of 200?,30,math,easy
+q042,"What is the average of 10, 20, and 30?",20,math,easy
+q043,What is the area of a square with side length 8 units?,64,math,easy
+q044,What is the opposite of negative 7?,7|positive 7,math,easy
+q045,What percentage is three quarters?,75|75%|75 percent,geography,easy
+q046,What is the largest desert in the world by area?,antarctic desert|antarctica|antarctic,science,easy
+q047,Which metal is liquid at room temperature?,mercury,science,easy
+q048,What does DNA stand for?,deoxyribonucleic acid,science,easy
+q049,What is the closest star to Earth?,sun|the sun,science,easy
+q050,What is the SI unit of force?,newton|newtons,science,easy
+q051,What is the capital of France?,paris,geography,easy
+q052,What is the capital of Germany?,berlin,geography,easy
+q053,What is the capital of Italy?,rome,geography,easy
+q054,What is the capital of Spain?,madrid,geography,easy
+q055,What is the capital of Portugal?,lisbon,geography,easy
+q056,What is the capital of Greece?,athens,geography,easy
+q057,What is the capital of Norway?,oslo,geography,easy
+q058,What is the capital of Sweden?,stockholm,geography,easy
+q059,What is the capital of Finland?,helsinki,geography,medium
+q060,What is the capital of Denmark?,copenhagen,geography,medium
+q061,What is the capital of Ireland?,dublin,geography,easy
+q062,What is the capital of Poland?,warsaw,geography,easy
+q063,What is the capital of Austria?,vienna,geography,easy
+q064,What is the capital of Belgium?,brussels,geography,easy
+q065,What is the capital of the Netherlands?,amsterdam,geography,easy
+q066,What is the capital of Russia?,moscow,geography,easy
+q067,What is the capital of China?,beijing,geography,easy
+q068,What is the capital of South Korea?,seoul,geography,easy
+q069,What is the capital of Thailand?,bangkok,geography,easy
+q070,What is the capital of Vietnam?,hanoi,geography,easy
+q071,What is the capital of Nepal?,kathmandu,geography,medium
+q072,What is the capital of Bangladesh?,dhaka,geography,easy
+q073,What is the capital of Pakistan?,islamabad,geography,easy
+q074,What is the capital of India?,new delhi|delhi,geography,easy
+q075,What is the capital of the United Arab Emirates?,abu dhabi,geography,easy
+q076,What is the capital of Saudi Arabia?,riyadh,geography,easy
+q077,What is the capital of Kenya?,nairobi,geography,easy
+q078,What is the capital of Nigeria?,abuja,geography,easy
+q079,What is the capital of Ghana?,accra,geography,easy
+q080,What is the capital of Ethiopia?,addis ababa,geography,easy
+q081,What is the capital of Morocco?,rabat,geography,medium
+q082,What is the capital of Turkey?,ankara,geography,medium
+q083,What is the capital of Mexico?,mexico city,geography,easy
+q084,What is the capital of Argentina?,buenos aires,geography,easy
+q085,What is the capital of Chile?,santiago,geography,easy
+q086,What is the capital of Peru?,lima,geography,medium
+q087,What is the capital of Colombia?,bogota|bogotá,geography,easy
+q088,Which country has the largest land area in the world?,russia,geography,easy
+q089,Which country has the smallest land area in the world?,vatican city,geography,easy
+q090,What is the largest island in the world?,greenland,geography,medium
+q091,Which mountain is the highest above sea level?,mount everest|everest,geography,medium
+q092,Which continent contains the Sahara Desert?,africa,geography,easy
+q093,Which continent contains the South Pole?,antarctica,geography,easy
+q094,Which country is home to Marrakech?,morocco,geography,medium
+q095,Which country is home to Mount Fuji?,japan,geography,easy
+q096,Which country is home to the Taj Mahal?,india,geography,medium
+q097,Which sea lies between Europe and Africa?,mediterranean sea,geography,medium
+q098,Which country contains the ancient city of Petra?,jordan,geography,easy
+q099,Which country contains the city of Barcelona?,spain,geography,easy
+q100,Which country is home to the city of Kyoto?,japan,geography,easy
+q101,What is the chemical symbol for silver?,ag|silver,science,easy
+q102,What is the chemical symbol for iron?,fe|iron,science,easy
+q103,What gas makes up most of Earth’s atmosphere?,nitrogen,science,easy
+q104,What is the freezing point of water in degrees Celsius?,0|0 degrees celsius|0 celsius|0°c,science,easy
+q105,What is the hardest natural substance?,diamond,science,easy
+q106,Which planet is closest to the Sun?,mercury,science,easy
+q107,Which planet is farthest from the Sun?,neptune,science,easy
+q108,What force pulls objects toward Earth?,gravity,science,easy
+q109,What is the process by which water vapor becomes liquid?,condensation,science,easy
+q110,What is the process by which liquid water becomes vapor?,evaporation,science,easy
+q111,Which organ filters blood and produces urine?,kidney|kidneys,science,easy
+q112,What is the largest organ of the human body?,skin,science,easy
+q113,Which blood cells carry most oxygen?,red blood cells|erythrocytes,science,easy
+q114,Which part of a plant absorbs water from soil?,roots|root,science,easy
+q115,What pigment gives plants their green color?,chlorophyll,science,easy
+q116,What is the center of an atom called?,nucleus,science,easy
+q117,Which subatomic particle has a negative charge?,electron,science,easy
+q118,Which subatomic particle has a positive charge?,proton,science,easy
+q119,Which subatomic particle has no electric charge?,neutron,science,easy
+q120,What is the approximate pH of pure water?,7|seven,science,easy
+q121,Which vitamin is produced in skin after sunlight exposure?,vitamin d|vitamin d3,science,easy
+q122,What is the main gas humans exhale?,carbon dioxide|co2,science,easy
+q123,What is the main gas humans inhale for respiration?,oxygen|o2,science,easy
+q124,What is the largest bone in the human body?,femur,science,easy
+q125,What is the smallest bone in the human body?,stapes,science,easy
+q126,Which brain region is mainly involved in balance?,cerebellum,science,medium
+q127,What is the basic unit of life?,cell,science,easy
+q128,What molecule carries genetic instructions in most organisms?,dna,science,easy
+q129,What type of energy is stored in food?,chemical energy,science,easy
+q130,What is the speed of light in vacuum approximately in km/s?,"300000|300,000",science,easy
+q131,What is the approximate acceleration due to gravity on Earth in m/s²?,9.8,science,easy
+q132,Which gas is essential for combustion?,oxygen,science,easy
+q133,What is Earth’s outer solid layer called?,crust,science,easy
+q134,What is molten rock beneath Earth’s surface called?,magma,science,easy
+q135,What is molten rock that reaches Earth’s surface called?,lava,science,easy
+q136,What is the study of weather called?,meteorology,science,easy
+q137,What is the study of earthquakes called?,seismology,science,easy
+q138,Which instrument measures atmospheric pressure?,barometer,science,easy
+q139,Which instrument measures temperature?,thermometer,science,easy
+q140,Which instrument measures wind speed?,anemometer,science,easy
+q141,What process turns a caterpillar into a butterfly?,metamorphosis,science,medium
+q142,Which is the largest species of cat?,tiger,science,medium
+q143,Which mammal can fly using powered flight?,bat|bats,science,medium
+q144,What material forms much of plant cell walls?,cellulose,science,medium
+q145,What is the chemical formula for carbon dioxide?,co2,science,easy
+q146,What is the chemical formula for oxygen gas?,o2,science,easy
+q147,What is the chemical symbol for copper?,cu|copper,science,easy
+q148,What is the chemical symbol for potassium?,k|potassium,science,easy
+q149,What is the chemical symbol for calcium?,ca|calcium,science,medium
+q150,What is the chemical symbol for helium?,he|helium,science,easy
+q151,What is 7 multiplied by 8?,56,math,medium
+q152,What is 9 multiplied by 11?,99,math,medium
+q153,What is 144 divided by 12?,12,math,easy
+q154,What is 225 divided by 15?,15,math,medium
+q155,What is 17 plus 28?,45,math,easy
+q156,What is 91 minus 37?,54,math,easy
+q157,What is 13 squared?,169,math,medium
+q158,What is 14 squared?,196,math,medium
+q159,What is 15 squared?,225,math,easy
+q160,What is the cube of 4?,64,math,easy
+q161,What is the cube of 5?,125,math,medium
+q162,What is 50 percent of 80?,40,math,easy
+q163,What is 25 percent of 240?,60,math,easy
+q164,What is 20 percent of 150?,30,math,easy
+q165,What is 10 percent of 450?,45,math,medium
+q166,What is 3/5 expressed as a decimal?,0.6,math,medium
+q167,What is 1/4 expressed as a decimal?,0.25,math,easy
+q168,What is 3/8 expressed as a decimal?,0.375,math,medium
+q169,What is 0.75 expressed as a fraction in simplest form?,3/4,math,easy
+q170,What is 0.2 expressed as a fraction in simplest form?,1/5,math,easy
+q171,What is the least common multiple of 4 and 6?,12,math,easy
+q172,What is the greatest common divisor of 18 and 24?,6,math,medium
+q173,What is the next prime number after 29?,31,math,medium
+q174,What is the largest prime number less than 20?,19,math,easy
+q175,What is the absolute value of -12?,12,math,medium
+q176,What is -8 plus 13?,5,math,easy
+q177,What is -7 multiplied by 6?,-42,math,easy
+q178,What is 2/3 of 24?,16,math,medium
+q179,What is 5/8 of 40?,25,math,medium
+q180,What is the area of a rectangle with length 10 and width 6?,60,math,easy
+q181,What is the perimeter of a rectangle with length 10 and width 6?,32,math,medium
+q182,What is the area of a triangle with base 10 and height 6?,30,math,easy
+q183,What is the circumference of a circle with radius 1 using pi as 3.14?,6.28,math,medium
+q184,What is the area of a circle with radius 2 using pi as 3.14?,12.56,math,medium
+q185,What is 2 to the power of 8?,256,math,easy
+q186,What is 3 to the power of 5?,243,math,medium
+q187,What is the square root of 121?,11,math,medium
+q188,What is the square root of 144?,12,math,easy
+q189,What is the square root of 225?,15,math,medium
+q190,"What is the average of 4, 8, and 12?",8,math,easy
+q191,"What is the median of 2, 9, and 5?",5,math,medium
+q192,"What is the mode of 2, 3, 3, and 4?",3,math,easy
+q193,"What is the next number in the sequence 2, 4, 6, 8?",10,math,medium
+q194,"What is the next number in the sequence 3, 6, 12, 24?",48,math,easy
+q195,What is 1 kilometer in centimeters?,"100000|100,000",math,easy
+q196,What is 1 meter in centimeters?,100,math,easy
+q197,What is 1 hour in minutes?,60,math,medium
+q198,What is 1 day in hours?,24,math,easy
+q199,What is 1 week in hours?,168,math,easy
+q200,What is the sum of the first five positive integers?,15,math,medium
+q201,What does CPU stand for?,central processing unit,computing,easy
+q202,What does GPU stand for?,graphics processing unit,computing,easy
+q203,What does RAM stand for?,random access memory,computing,easy
+q204,What does ROM stand for?,read-only memory|read only memory,computing,easy
+q205,What does HTTP stand for?,hypertext transfer protocol,computing,easy
+q206,What does HTTPS provide beyond HTTP?,encryption|secure communication|tls,computing,easy
+q207,What does URL stand for?,uniform resource locator,computing,easy
+q208,What does API stand for?,application programming interface,computing,easy
+q209,What does JSON stand for?,javascript object notation,computing,easy
+q210,What does SQL stand for?,structured query language,computing,easy
+q211,What does CSS stand for?,cascading style sheets,computing,easy
+q212,What does HTML stand for?,hypertext markup language,computing,easy
+q213,What does Git primarily track?,changes to source code|version history,computing,easy
+q214,What does an operating system manage?,computer hardware and software resources,computing,easy
+q215,Which data structure follows LIFO order?,stack,computing,easy
+q216,Which data structure follows FIFO order?,queue,computing,easy
+q217,What is the time complexity of binary search on a sorted array?,o(log n)|log n,computing,medium
+q218,What is the time complexity of array access by index?,o(1)|1,computing,medium
+q219,What is the worst-case time complexity of searching an unsorted array?,o(n)|n,computing,easy
+q220,"Which BST traversal visits left subtree, root, right subtree?",inorder,computing,easy
+q221,Which traversal visits tree nodes level by level?,breadth-first search|bfs,computing,medium
+q222,Which traversal commonly uses recursion or a stack?,depth-first search|dfs,computing,medium
+q223,Which shortest-path algorithm works with non-negative edge weights?,dijkstra|dijkstra algorithm|dijkstra’s algorithm,computing,easy
+q224,Which shortest-path algorithm handles negative edge weights?,bellman-ford|bellman ford,computing,easy
+q225,Which algorithm finds an MST by repeatedly selecting the lightest connecting edge?,kruskal|kruskal algorithm,computing,easy
+q226,Which algorithm grows an MST from a starting vertex?,prim|prim algorithm,computing,easy
+q227,What is the average hash table lookup complexity?,o(1)|1,computing,medium
+q228,What keyword declares a constant in C++?,const,computing,easy
+q229,Which language is associated with CPython?,python,computing,easy
+q230,What symbol begins a single-line comment in Python?,#|hash,computing,easy
+q231,Which Python type stores key-value pairs?,dictionary|dict,computing,easy
+q232,Which Python library is commonly used for tabular data?,pandas,computing,easy
+q233,Which Python library is commonly used for numerical arrays?,numpy,computing,medium
+q234,Which Python library provides logistic regression and many classical ML models?,scikit-learn|sklearn,computing,medium
+q235,What does ML stand for?,machine learning,computing,easy
+q236,What does NLP stand for?,natural language processing,computing,easy
+q237,What does CNN stand for?,convolutional neural network,computing,easy
+q238,What does RNN stand for?,recurrent neural network,computing,easy
+q239,What does LLM stand for?,large language model,computing,easy
+q240,What does RAG stand for in generative AI?,retrieval augmented generation|retrieval-augmented generation,computing,easy
+q241,What is an embedding typically used to represent?,data as a vector|vector representation,computing,easy
+q242,What does cosine similarity compare?,similarity between vectors|vector similarity,computing,easy
+q243,What is overfitting?,fitting training data too closely and generalizing poorly|poor generalization,computing,easy
+q244,What is a validation set used for?,model selection and hyperparameter tuning|tuning and model selection,computing,medium
+q245,What is a test set used for?,final evaluation of a model,computing,medium
+q246,What is precision in binary classification?,true positives divided by predicted positives,computing,easy
+q247,What is recall in binary classification?,true positives divided by actual positives,computing,easy
+q248,What does ROC-AUC measure?,ability to distinguish classes across thresholds,computing,easy
+q249,Why standardize features in machine learning?,rescale features to a common scale|put features on a common scale,computing,medium
+q250,What is logistic regression commonly used for?,classification|binary classification,computing,easy
+q251,Who wrote The Odyssey?,homer,history,easy
+q252,Who wrote The Iliad?,homer,history,easy
+q253,Who wrote Hamlet?,william shakespeare|shakespeare,history,easy
+q254,Who wrote Pride and Prejudice?,jane austen,history,easy
+q255,Who wrote 1984?,george orwell,history,easy
+q256,Who wrote The Great Gatsby?,f. scott fitzgerald|scott fitzgerald,history,medium
+q257,Who wrote To Kill a Mockingbird?,harper lee,history,easy
+q258,Who wrote The Hobbit?,j. r. r. tolkien|jrr tolkien|tolkien,history,easy
+q259,Who painted The Starry Night?,vincent van gogh,history,easy
+q260,Who painted The Last Supper?,leonardo da vinci,history,easy
+q261,Who sculpted David?,michelangelo,history,easy
+q262,Who composed The Four Seasons?,antonio vivaldi|vivaldi,history,easy
+q263,Who was the first person to walk on the Moon?,neil armstrong,history,easy
+q264,In what year did humans first land on the Moon?,1969,history,easy
+q265,In what year did India gain independence from British rule?,1947,history,easy
+q266,Who was the first Prime Minister of independent India?,jawaharlal nehru|nehru,history,easy
+q267,Who was a major leader of the Indian nonviolent independence movement?,mahatma gandhi|gandhi,history,medium
+q268,In what year did the French Revolution begin?,1789,history,easy
+q269,In what year did the Berlin Wall fall?,1989,history,easy
+q270,In what year did the Titanic sink?,1912,history,easy
+q271,Which civilization built Machu Picchu?,inca|incan civilization,history,easy
+q272,Which ancient civilization built the Colosseum?,romans|roman,history,easy
+q273,What was the ancient Egyptian writing system called?,hieroglyphs|hieroglyphics,history,medium
+q274,Who was the first emperor of Rome?,augustus|octavian,history,medium
+q275,Which Roman city was destroyed by Mount Vesuvius in 79 CE?,pompeii,history,medium
+q276,Who was the first woman to win a Nobel Prize?,marie curie|curie,history,medium
+q277,Who discovered penicillin?,alexander fleming|fleming,history,medium
+q278,Who is credited with inventing the telephone?,alexander graham bell|bell,history,easy
+q279,Who developed the theory of relativity?,albert einstein|einstein,history,easy
+q280,Who proposed the three laws of motion?,isaac newton|newton,history,easy
+q281,Who was the first woman in space?,valentina tereshkova,history,easy
+q282,Who was the first human to orbit Earth?,yuri gagarin|gagarin,history,easy
+q283,What was the name of the ship that carried the Pilgrims in 1620?,mayflower,history,easy
+q284,In what year did the United States declare independence?,1776,history,easy
+q285,Who was a primary author of the Declaration of Independence?,thomas jefferson|jefferson,history,easy
+q286,Which war was fought between the Union and Confederacy?,american civil war|civil war,history,easy
+q287,Who was British prime minister during most of World War II?,winston churchill|churchill,history,easy
+q288,What was the first artificial satellite called?,sputnik 1|sputnik,history,easy
+q289,In what year was the first artificial satellite launched?,1957,history,easy
+q290,Who was known as the Maid of Orléans?,joan of arc,history,medium
+q291,Which civilization built the Colosseum?,roman|romans,culture,medium
+q292,Which document begins with “We the People” in the United States?,united states constitution|constitution,culture,medium
+q293,Who was the first President of the United States?,george washington|washington,culture,medium
+q294,Who painted the Mona Lisa?,leonardo da vinci,culture,medium
+q295,Who wrote Don Quixote?,miguel de cervantes|cervantes,culture,easy
+q296,Who wrote The Divine Comedy?,dante|dante alighieri,culture,medium
+q297,Who composed Für Elise?,ludwig van beethoven|beethoven,culture,medium
+q298,Who composed The Magic Flute?,wolfgang amadeus mozart|mozart,culture,medium
+q299,Who composed Swan Lake?,pyotr tchaikovsky|tchaikovsky,culture,easy
+q300,Who was the Greek god of the sea?,poseidon,culture,easy
