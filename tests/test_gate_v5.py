@@ -184,6 +184,43 @@ def test_unverified_or_unsupported_answer_cannot_trust_or_report_score(monkeypat
         assert result.fact_verification_status == status
 
 
+def test_rahul_gandhi_biographical_claim_is_permanently_fail_closed(monkeypatch):
+    question = "who is rahul gandhi"
+    captured_hallucination = (
+        "Rahul Gandhi is a prominent Indian politician and a leader of the "
+        "Bharatiya Janata Party (BJP)."
+    )
+    results = [
+        SimpleNamespace(
+            answer=captured_hallucination,
+            mean_logprob=-0.2,
+            min_logprob=-0.9,
+            finished=True,
+        )
+    ] * 5
+    monkeypatch.setattr(rg, "sample_answers", lambda llm, prompt: results)
+
+    verifier = rg.verify_answer(question, captured_hallucination)
+    result = make_gate(0.99).predict(question)
+
+    assert verifier.status == "UNSUPPORTED"
+    assert result.answer == captured_hallucination
+    assert result.fact_verification_status == "UNSUPPORTED"
+    assert result.decision == "VERIFY"
+    assert not result.reliability_reported
+
+    from test_ui_regression import load_ui
+
+    ui = load_ui()
+    view = ui["build_view"](result, 1.0, "CPU")
+    html = ui["result_html"](view)
+    assert view["decision"] == "VERIFY"
+    assert view["score_valid"] is False
+    assert "UNSUPPORTED QUESTION TYPE" in html
+    assert "N/A" in html
+    assert "99.0%" not in html
+
+
 def test_verifier_exception_fails_closed(monkeypatch):
     results = [SimpleNamespace(answer=GOOD, mean_logprob=-0.2, min_logprob=-0.9, finished=True)] * 5
     monkeypatch.setattr(rg, "sample_answers", lambda llm, question: results)

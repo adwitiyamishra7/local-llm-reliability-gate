@@ -136,6 +136,16 @@ def test_unreliable_verified_status_without_support_fails_closed(ui):
     assert "90.0%" not in ui["result_html"](view)
 
 
+def test_material_disagreement_forces_verify_and_hides_score(ui):
+    value = result("Sydney", 0.99)
+    value.material_disagreement = True
+    view = ui["build_view"](value, 1.0, "CPU")
+    assert view["decision"] == "VERIFY" and view["score_valid"] is False
+    html = ui["result_html"](view)
+    assert "99.0%" not in html
+    assert "Sample disagreement detected" in html
+
+
 def test_valid_answer_valid_calibration_shows_score_and_policy(ui):
     view = ui["build_view"](result("William Shakespeare", 0.90), 1.0, "CPU")
     assert view["decision"] == "TRUST" and view["score_valid"] is True

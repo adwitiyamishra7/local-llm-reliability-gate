@@ -24,7 +24,7 @@ foreach ($dir in @('src','scripts','tests')) {
     Copy-Item $_.FullName $dest -Force
   }
 }
-foreach ($name in @('app.py','README.md','INSTALL_V5.md','requirements.txt','requirements-dev.txt','pyproject.toml','uv.lock','pytest.ini','.gitignore','_gitignore')) {
+foreach ($name in @('app.py','README.md','ARCHITECTURE.md','CHANGELOG.md','requirements.txt','requirements-dev.txt','pyproject.toml','uv.lock','pytest.ini','.gitignore','_gitignore')) {
   $src = Join-Path $root $name
   if (Test-Path $src -PathType Leaf) { Copy-Item $src (Join-Path $stage $name) -Force }
 }

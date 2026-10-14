@@ -626,15 +626,18 @@ def build_view(result: object, latency: float, runtime: str) -> dict:
     verification_evidence = str(getattr(result, "fact_verification_evidence", ""))
     verification_source_url = str(getattr(result, "fact_verification_source_url", ""))
     verification_supported = bool(getattr(result, "fact_verification_supported", False))
+    material_disagreement = bool(getattr(result, "material_disagreement", False))
 
     decision = (
         "VERIFY"
         if (not quality.is_useful or not calibrated or not reliability_reported
-            or verification_status != "VERIFIED" or not verification_supported)
+            or material_disagreement or verification_status != "VERIFIED"
+            or not verification_supported)
         else model_decision
     )
     score_valid = bool(
         quality.is_useful and calibrated and reliability_reported
+        and not material_disagreement
         and verification_status == "VERIFIED" and verification_supported
     )
     keys, winner, distinct = answer_groups(question, samples)
@@ -655,6 +658,7 @@ def build_view(result: object, latency: float, runtime: str) -> dict:
         "fact_verification_evidence": verification_evidence,
         "fact_verification_source_url": verification_source_url,
         "fact_verification_supported": verification_supported,
+        "material_disagreement": material_disagreement,
         "agreement": float(result.answer_agreement),
         "margin": float(result.consensus_margin),
         "entropy": float(result.answer_key_entropy),
@@ -878,6 +882,12 @@ def result_html(view: dict) -> str:
                 "<b>Response-quality safeguard triggered.</b> "
                 f"{esc(view['quality_reason'])} The final recommendation is VERIFY. "
                 "No reliability percentage is reported for a non-answer."
+            )
+        elif view.get("material_disagreement", False):
+            message = (
+                "<b>Sample disagreement detected.</b> The generated answers contain "
+                "materially different useful claims, so the final recommendation is VERIFY. "
+                "Agreement among samples is required before a reliability score can authorize trust."
             )
         elif view.get("fact_verification_status", "UNVERIFIED") != "VERIFIED":
             message = (
@@ -1145,6 +1155,7 @@ def technical_html(view: dict) -> str:
         ("Final decision", view["decision"]),
         ("Classifier decision", view["model_decision"]),
         ("Response quality", "Passed" if view["quality_ok"] else "Flagged: " + view["quality_reason"]),
+        ("Material sample disagreement", "Yes" if view.get("material_disagreement") else "No"),
         ("Independent fact verification", view.get("fact_verification_status", "UNVERIFIED")),
         ("Verifier result", view.get("fact_verification_reason", "No result")),
         ("Verifier evidence", view.get("fact_verification_evidence", "") or "No evidence"),
