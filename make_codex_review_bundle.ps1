@@ -1,7 +1,8 @@
-$ErrorActionPreference = 'Stop'
-$root = 'E:\LLM GATE\local-llm-reliability-gate'
-if (!(Test-Path $root -PathType Container)) { throw "Project root not found: $root" }
+﻿$ErrorActionPreference = 'Stop'
+$root = $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($root) -or !(Test-Path $root -PathType Container)) { throw "Could not resolve the folder containing this script. Save this script in the project root and run it from there." }
 $root = (Resolve-Path $root).Path
+if (!(Test-Path (Join-Path $root 'app.py') -PathType Leaf) -or !(Test-Path (Join-Path $root 'src\gate') -PathType Container)) { throw "This does not look like the Local LLM Reliability Gate project root: $root" }
 $stage = Join-Path $env:TEMP 'llm_gate_review_bundle_stage'
 $zip = Join-Path $root 'local_llm_gate_review_bundle.zip'
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
@@ -23,7 +24,7 @@ foreach ($dir in @('src','scripts','tests')) {
     Copy-Item $_.FullName $dest -Force
   }
 }
-foreach ($name in @('app.py','README.md','requirements.txt','requirements-dev.txt','pyproject.toml','uv.lock','pytest.ini','.gitignore','_gitignore')) {
+foreach ($name in @('app.py','README.md','INSTALL_V5.md','requirements.txt','requirements-dev.txt','pyproject.toml','uv.lock','pytest.ini','.gitignore','_gitignore')) {
   $src = Join-Path $root $name
   if (Test-Path $src -PathType Leaf) { Copy-Item $src (Join-Path $stage $name) -Force }
 }
@@ -53,3 +54,4 @@ $item = Get-Item $zip
 Write-Host "REVIEW BUNDLE CREATED: $($item.FullName)" -ForegroundColor Green
 Write-Host ("Size: {0:N2} MB" -f ($item.Length / 1MB))
 Write-Host 'Check BUNDLE_MANIFEST.txt includes src/gate, tests, scripts, app.py and smoke_v5_diagnostic.json.'
+Write-Host 'The script did not change your source files; it only copied selected files and created the ZIP.'
