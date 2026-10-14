@@ -58,6 +58,8 @@ def test_capital_evidence_labels_aliases_separately(monkeypatch):
         payload = fake_wikidata_get_json(params)
         if params.get("props") == "labels|aliases":
             payload["entities"]["Q2817"]["aliases"]["en"].append({"value": "Canberra City"})
+            payload["entities"]["Q2817"]["aliases"]["en"].append({"value": "canberra city"})
+            payload["entities"]["Q2817"]["aliases"]["en"].append({"value": "CANBERRA"})
         return payload
 
     monkeypatch.setattr(fv, "_get_json", fake_with_alias)
@@ -69,6 +71,9 @@ def test_capital_evidence_labels_aliases_separately(monkeypatch):
     )
     assert "current capital value(s)" not in result.evidence
     assert result.expected_values and "Canberra City" in result.expected_values
+    alias_text = result.evidence.split("Alternate name(s)/aliases: ", 1)[1]
+    assert alias_text == "Canberra City."
+    assert set(("Canberra", "Canberra City", "canberra city", "CANBERRA")) <= set(result.expected_values)
 
 
 def test_wrong_capital_contradicted_from_wikidata(monkeypatch):

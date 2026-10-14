@@ -380,6 +380,12 @@ def _verify_capital(question: str, answer: str, subject: str) -> VerificationRes
             for alias in aliases
         }
         expected = tuple(sorted(canonical_names | alias_names, key=len, reverse=True))
+        canonical_norms = {_normalise(canonical) for canonical in canonical_names}
+        display_aliases: dict[str, str] = {}
+        for alias in sorted(alias_names, key=lambda value: (value.casefold(), value)):
+            alias_norm = _normalise(alias)
+            if alias_norm and alias_norm not in canonical_norms:
+                display_aliases.setdefault(alias_norm, alias)
         capital_word = "capital" if len(canonical_names) == 1 else "capitals"
         if canonical_names:
             capital_evidence = (
@@ -388,10 +394,10 @@ def _verify_capital(question: str, answer: str, subject: str) -> VerificationRes
             )
         else:
             capital_evidence = "Wikidata returned no canonical English capital label."
-        if alias_names:
+        if display_aliases:
             capital_evidence += (
                 " Alternate name(s)/aliases: "
-                f"{', '.join(sorted(alias_names))}."
+                f"{', '.join(display_aliases.values())}."
             )
         if not expected:
             return VerificationResult(
