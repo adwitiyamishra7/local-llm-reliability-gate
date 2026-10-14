@@ -5,6 +5,7 @@ import logging
 import math
 import sys
 import threading
+import time
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -263,6 +264,7 @@ html, body, .stApp {
 
 /* ---------- notices ---------- */
 .notice { display: flex; gap: 12px; align-items: flex-start; padding: 14px 18px; border-radius: 16px; margin-top: 16px; border: 1px solid; animation: rise 0.4s ease both; }
+.notice.info { background: #eef2ff; border-color: #c7d2fe; color: #3730a3; }
 .notice.warn { background: #fffbeb; border-color: #fde68a; color: #78350f; }
 .notice.error { background: #fff1f2; border-color: #fecdd3; color: #881337; }
 .notice b { display: block; margin-bottom: 2px; }
@@ -307,9 +309,10 @@ html, body, .stApp {
 .qecho b { color: #334155; }
 .answer { font-size: 1.9rem; line-height: 1.25; font-weight: 750; letter-spacing: -0.015em; margin: 6px 0 22px; word-break: break-word; }
 .badge-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
-.badge { display: inline-flex; align-items: center; gap: 10px; padding: 12px 22px; border-radius: 16px; font-weight: 800; font-size: 1.25rem; letter-spacing: 0.06em; }
-.badge.trust { color: #fff; background: linear-gradient(135deg, #10b981, #059669); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 12px 26px rgba(5, 150, 105, 0.35); }
-.badge.verify { color: #451a03; background: linear-gradient(135deg, #fcd34d, #f59e0b); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 12px 26px rgba(245, 158, 11, 0.38); }
+.badge { display: inline-flex; align-items: center; gap: 9px; padding: 9px 16px; border-radius: 999px; font-weight: 800; font-size: 1.02rem; letter-spacing: 0.08em; cursor: default; user-select: none; box-shadow: none; }
+.badge.trust { color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; }
+.badge.verify { color: #92400e; background: #fffbeb; border: 1px solid #fcd34d; }
+.badge svg { width: 20px; height: 20px; flex: none; }
 .thr-chip { padding: 8px 14px; border-radius: 12px; background: #f1f5ff; border: 1px solid var(--line); font-size: 0.85rem; font-weight: 650; color: #334155; }
 .decision-msg { color: #334155; font-size: 0.97rem; line-height: 1.55; margin-bottom: 14px; }
 .disclaimer { color: var(--muted); font-size: 0.8rem; line-height: 1.5; border-top: 1px dashed rgba(99, 102, 241, 0.25); padding-top: 12px; }
@@ -687,6 +690,86 @@ def run_check(gate: ReliabilityGate, question: str) -> dict:
     return build_view(result, latency, runtime_label(gate))
 
 
+def run_with_stage_hooks(gate: ReliabilityGate, question: str, on_stage) -> dict:
+    """Report actual gate call boundaries while keeping instrumentation in the UI layer."""
+    from src.gate import reliability_gate as gate_module
+
+    model = gate.model
+    original_sample = gate_module.sample_answers
+    original_verify = gate_module.verify_answer
+    original_predict_proba = model.predict_proba
+    original_build_features = gate._build_features
+    original_consensus = gate._select_consensus
+    had_predict_proba = "predict_proba" in vars(model)
+    had_build_features = "_build_features" in vars(gate)
+    had_consensus = "_select_consensus" in vars(gate)
+
+    def tracked_sampling(*args, **kwargs):
+        on_stage(f"Sampling {N_SAMPLES} answers")
+        return original_sample(*args, **kwargs)
+
+    def tracked_features(*args, **kwargs):
+        on_stage("Extracting reliability features")
+        return original_build_features(*args, **kwargs)
+
+    def tracked_classification(*args, **kwargs):
+        on_stage("Classifying answer reliability")
+        return original_predict_proba(*args, **kwargs)
+
+    def tracked_consensus(*args, **kwargs):
+        result = original_consensus(*args, **kwargs)
+        if not result[1].get("quality_ok"):
+            on_stage("Finalizing the recommendation")
+        return result
+
+    def tracked_verification(*args, **kwargs):
+        on_stage("Running independent verification")
+        verification = original_verify(*args, **kwargs)
+        on_stage("Finalizing the recommendation")
+        return verification
+
+    gate_module.sample_answers = tracked_sampling
+    gate_module.verify_answer = tracked_verification
+    model.predict_proba = tracked_classification
+    gate._build_features = tracked_features
+    gate._select_consensus = tracked_consensus
+    try:
+        return run_check(gate, question)
+    finally:
+        gate_module.sample_answers = original_sample
+        gate_module.verify_answer = original_verify
+        if had_predict_proba:
+            model.predict_proba = original_predict_proba
+        else:
+            delattr(model, "predict_proba")
+        if had_build_features:
+            gate._build_features = original_build_features
+        else:
+            delattr(gate, "_build_features")
+        if had_consensus:
+            gate._select_consensus = original_consensus
+        else:
+            delattr(gate, "_select_consensus")
+
+
+def load_and_run(gate_was_loaded: bool, question: str, on_stage):
+    if not gate_was_loaded:
+        on_stage(f"Loading local model: {MODEL_NAME.split('/')[-1]}")
+    gate, error = ensure_gate()
+    if gate is None:
+        return None, error, None
+    on_stage("Starting reliability check")
+    return gate, None, run_with_stage_hooks(gate, question, on_stage)
+
+
+def request_submit() -> None:
+    st.session_state["submit_requested"] = True
+
+
+def submit_requested(button_clicked: bool, enter_requested: bool) -> bool:
+    return bool(button_clicked or enter_requested)
+
+
 # ============================================================
 # HTML BUILDERS
 # ============================================================
@@ -735,7 +818,7 @@ def hero_html(status: str, runtime: str | None = None) -> str:
 
 
 def notice_html(kind: str, title: str, body: str) -> str:
-    icon = "⚠️" if kind == "warn" else "⛔"
+    icon = {"info": "ℹ️", "warn": "⚠️", "error": "⛔"}.get(kind, "ℹ️")
     return f"""
     <div class="notice {kind}">
         <div>{icon}</div>
@@ -744,8 +827,20 @@ def notice_html(kind: str, title: str, body: str) -> str:
     """
 
 
+def calibration_banner_html(loaded: bool, calibrated: bool, note: str) -> str:
+    if not loaded:
+        return notice_html(
+            "info",
+            "Model not loaded yet",
+            "The local model loads automatically when you check your first question.",
+        )
+    if not calibrated:
+        return notice_html("warn", "Calibration refresh required", note)
+    return ""
+
+
 def loading_html(title: str, detail: str) -> str:
-    """Honest, indeterminate loading state (no fake percentages or completed stages)."""
+    """Render one real pipeline stage with elapsed time and an indeterminate animation."""
     return f"""
     <div class="loading card" role="status" aria-live="polite">
         <div class="spin" aria-hidden="true"></div>
@@ -1272,11 +1367,11 @@ hero_slot.markdown(
 )
 
 calibration_slot = st.empty()
-if not _state["calibrated"]:
-    calibration_slot.markdown(
-        html_block(notice_html("warn", "Calibration refresh required", _state["calibration_note"])),
-        unsafe_allow_html=True,
-    )
+calibration_banner = calibration_banner_html(
+    _state["loaded"], _state["calibrated"], _state["calibration_note"]
+)
+if calibration_banner:
+    calibration_slot.markdown(html_block(calibration_banner), unsafe_allow_html=True)
 
 
 # ---------------- input card ----------------
@@ -1297,12 +1392,12 @@ with input_box:
         """
     )
 
-    st.text_area(
+    st.text_input(
         "Question",
         key="question_input",
         placeholder="Ask a factual question...",
-        height=110,
         label_visibility="collapsed",
+        on_change=request_submit,
     )
 
     render('<div class="mini-label">Try an example</div>')
@@ -1329,12 +1424,15 @@ with input_box:
         st.button("Clear", on_click=clear_all, use_container_width=True)
 
 
-# ---------------- run the gate (only on the click rerun) ----------------
+# ---------------- run the gate (only on the submit rerun) ----------------
 
 notice_slot = st.empty()
 status_slot = st.empty()
 
-if run_clicked:
+enter_requested = bool(st.session_state.pop("submit_requested", False))
+run_requested = submit_requested(run_clicked, enter_requested)
+
+if run_requested:
     question_text = st.session_state.get("question_input", "").strip()
     state = process_state()
 
@@ -1365,19 +1463,21 @@ if run_clicked:
 
     else:
         try:
-            if not state["loaded"]:
-                hero_slot.markdown(html_block(hero_html("loading")), unsafe_allow_html=True)
+            started_loading = time.monotonic()
+
+            def show_stage(stage: str) -> None:
+                elapsed = time.monotonic() - started_loading
                 status_slot.markdown(
                     html_block(
                         loading_html(
-                            f"Loading {MODEL_NAME.split('/')[-1]} into memory…",
-                            "First question only. Later questions reuse the loaded model.",
+                            stage,
+                            f"Still working · elapsed {elapsed:.1f}s · local inference",
                         )
                     ),
                     unsafe_allow_html=True,
                 )
 
-            gate, load_error = ensure_gate()
+            gate, load_error, new_view = load_and_run(state["loaded"], question_text, show_stage)
 
             if gate is not None and gate.calibrated:
                 calibration_slot.empty()
@@ -1422,7 +1522,8 @@ if run_clicked:
                 )
 
                 try:
-                    new_view = run_check(gate, question_text)
+                    if new_view is None:
+                        raise RuntimeError("The reliability gate returned no result.")
 
                 except (AttributeError, TypeError, ValueError, KeyError):
                     logger.exception("Gate returned an unexpected result")
@@ -1487,7 +1588,7 @@ if run_clicked:
 
 # ---------------- model-load error detail ----------------
 
-if load_error is not None and not run_clicked:
+if load_error is not None and not run_requested:
     render(notice_html("error", load_error["title"], load_error["body"]))
     with st.expander("Error message"):
         st.code(load_error["detail"], language="text")
