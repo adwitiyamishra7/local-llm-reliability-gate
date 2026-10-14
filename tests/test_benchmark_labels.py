@@ -37,3 +37,19 @@ def test_canonical_question_and_reference_provenance_is_exact():
     benchmark.loc[0, "reference"] = "tampered"
     _, errors = audit_reference_provenance(benchmark)
     assert any("q001: reference differs" in error for error in errors)
+
+
+def test_explicitly_negated_text_alias_does_not_count_as_correct():
+    assert label_correct("The capital of Australia is not Canberra, but Sydney.", "Canberra") == 0
+    assert label_correct("Sydney, not Canberra, is the capital.", "Canberra") == 0
+    assert label_correct("Canberra is not the capital of Australia.", "Canberra") == 0
+
+
+def test_explicitly_negated_numeric_answer_does_not_count_as_correct():
+    assert label_correct("The correct answer is not 36, but 35.", "36") == 0
+    assert label_correct("36 is incorrect; the answer is 35.", "36") == 0
+    assert label_correct("It is not 36. It is 35.", "36") == 0
+
+
+def test_affirmed_answer_survives_contrasting_alternative():
+    assert label_correct("The capital is Canberra, not Sydney.", "Canberra") == 1

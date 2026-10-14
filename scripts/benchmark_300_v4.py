@@ -52,14 +52,47 @@ def _norm(text: object) -> str:
     return " ".join(t.split())
 
 
+def _is_negated_occurrence(text: str, start: int, end: int) -> bool:
+    """Conservatively reject a reference occurrence explicitly denied in context.
+
+    This prevents obvious false positives such as "not Canberra, but Sydney" or
+    "36 is incorrect" from being labelled correct merely because the gold alias
+    appears somewhere in the response. It is not a general semantic evaluator.
+    """
+    before = text[max(0, start - 60):start]
+    after = text[end:min(len(text), end + 50)]
+    if re.search(
+        r"\b(?:not|never|no|neither|isn\s+t|wasn\s+t|doesn\s+t|didn\s+t|cannot|incorrect|wrong|false)\s+$",
+        before,
+    ):
+        return True
+    # Only treat a following denial as scoped to this occurrence when it has an
+    # explicit predicate ("Canberra is not the capital"), not a contrast such as
+    # "Canberra, not Sydney, is the capital".
+    if re.match(
+        r"\s*(?:(?:is|was|are|were|equals?|means?)\s+)(?:not|never|incorrect|wrong|false|ruled\s+out)\b",
+        after,
+    ):
+        return True
+    if re.match(r"\s*(?:isn\s+t|wasn\s+t|aren\s+t|weren\s+t)\b", after):
+        return True
+    return False
+
+
 def label_correct(answer: object, reference: object) -> int:
-    """Match a curated reference alias, preserving numeric signs and decimal values."""
+    """Match a curated reference alias, rejecting explicitly negated matches.
+
+    The label remains a lightweight alias-match proxy, not an independent
+    semantic or human correctness judgement.
+    """
     ans = _norm(answer)
     number_pattern = re.compile(r"(?<![a-z0-9.+\-])[+-]?\d+(?:\.\d+)?%?(?![a-z0-9.])")
     answer_numbers: set[Decimal] = set()
-    for token in number_pattern.findall(ans):
+    for match in number_pattern.finditer(ans):
+        if _is_negated_occurrence(ans, *match.span()):
+            continue
         try:
-            answer_numbers.add(Decimal(token.rstrip("%")))
+            answer_numbers.add(Decimal(match.group().rstrip("%")))
         except InvalidOperation:
             pass
     for ref in re.split(r"\s*(?:\||;)\s*", str(reference)):
@@ -75,8 +108,13 @@ def label_correct(answer: object, reference: object) -> int:
                     return 1
             except InvalidOperation:
                 pass
-        elif re.search(rf"(?<![a-z0-9]){re.escape(r)}(?![a-z0-9])", ans):
-            return 1
+        else:
+            pattern = rf"(?<![a-z0-9]){re.escape(r)}(?![a-z0-9])"
+            if any(
+                not _is_negated_occurrence(ans, *match.span())
+                for match in re.finditer(pattern, ans)
+            ):
+                return 1
     return 0
 
 

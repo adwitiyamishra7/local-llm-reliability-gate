@@ -245,10 +245,16 @@ class ReliabilityGate:
                 "with: " + "; ".join(diffs)
             )
         saved_fingerprint = payload.get("generation_fingerprint", payload.get("config_fingerprint"))
-        if saved_fingerprint is not None and str(saved_fingerprint) != config_fingerprint():
+        live_fingerprint = config_fingerprint()
+        if not isinstance(saved_fingerprint, str) or not saved_fingerprint.strip():
+            return False, (
+                "The artifact has no saved configuration fingerprint. "
+                "Calibration cannot be verified; retrain/finalize with the current V5 workflow."
+            )
+        if saved_fingerprint != live_fingerprint:
             return False, (
                 "The artifact fingerprint does not match the current configuration "
-                f"(trained={saved_fingerprint!r}, live={config_fingerprint()!r})."
+                f"(trained={saved_fingerprint!r}, live={live_fingerprint!r})."
             )
         return True, ""
 

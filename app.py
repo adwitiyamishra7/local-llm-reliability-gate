@@ -1271,8 +1271,12 @@ hero_slot.markdown(
     unsafe_allow_html=True,
 )
 
+calibration_slot = st.empty()
 if not _state["calibrated"]:
-    render(notice_html("warn", "Calibration refresh required", _state["calibration_note"]))
+    calibration_slot.markdown(
+        html_block(notice_html("warn", "Calibration refresh required", _state["calibration_note"])),
+        unsafe_allow_html=True,
+    )
 
 
 # ---------------- input card ----------------
@@ -1374,6 +1378,20 @@ if run_clicked:
                 )
 
             gate, load_error = ensure_gate()
+
+            if gate is not None and gate.calibrated:
+                calibration_slot.empty()
+            elif gate is not None:
+                calibration_slot.markdown(
+                    html_block(
+                        notice_html(
+                            "warn",
+                            "Calibration refresh required",
+                            state["calibration_note"],
+                        )
+                    ),
+                    unsafe_allow_html=True,
+                )
 
             if gate is None:
                 hero_slot.markdown(html_block(hero_html("offline")), unsafe_allow_html=True)

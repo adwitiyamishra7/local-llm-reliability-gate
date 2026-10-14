@@ -79,9 +79,22 @@ def test_v4_classifier_is_not_calibrated_for_v5():
     assert not ok and "prompt_version" in note and "temperature" in note
 
 
-def test_missing_config_is_not_calibrated_and_matching_config_is():
+def test_missing_config_or_fingerprint_is_not_calibrated():
     assert not rg.ReliabilityGate._check_calibration({})[0]
-    assert rg.ReliabilityGate._check_calibration({"generation_config": cfg.generation_config()})[0]
+    assert not rg.ReliabilityGate._check_calibration(
+        {"generation_config": cfg.generation_config()}
+    )[0]
+    assert not rg.ReliabilityGate._check_calibration({
+        "generation_config": cfg.generation_config(),
+        "generation_fingerprint": "",
+    })[0]
+
+
+def test_matching_config_and_fingerprint_is_calibrated():
+    assert rg.ReliabilityGate._check_calibration({
+        "generation_config": cfg.generation_config(),
+        "generation_fingerprint": cfg.config_fingerprint(),
+    })[0]
 
 
 def test_stale_artifact_fingerprint_is_not_calibrated():
@@ -251,6 +264,23 @@ def test_conflicting_useful_candidates_cannot_trust_wrong_majority(monkeypatch):
     answers = ["Sydney"] * 3 + ["Canberra"] * 2
     r = run(monkeypatch, make_gate(0.99), answers, q="What is the capital of Australia?")
     assert r.answer == "Sydney"
+    assert r.material_disagreement is True
+    assert r.decision == "VERIFY"
+
+
+def test_mongolia_realistic_conflicting_capitals_stay_disagreement(monkeypatch):
+    question = "What is the capital of Mongolia?"
+    answers = [
+        "The capital of Mongolia is Nangaralt.",
+        "The capital of Mongolia is Ulaanbaatar.",
+        "The capital of Mongolia is Ulaanbaatar.",
+        "The capital of Mongolia is Kyungju.",
+        "The capital of Mongolia is Ulaanbaatar.",
+    ]
+    assert rg.grouped_answer_keys(question, answers) == [
+        "nangaralt", "ulaanbaatar", "ulaanbaatar", "kyungju", "ulaanbaatar",
+    ]
+    r = run(monkeypatch, make_gate(0.99), answers, q=question)
     assert r.material_disagreement is True
     assert r.decision == "VERIFY"
 

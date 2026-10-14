@@ -205,7 +205,7 @@ def _entity_claims(item_id: str) -> dict:
     return entity
 
 
-def _labels_for_items(item_ids: list[str]) -> dict[str, tuple[str, ...]]:
+def _labels_for_items(item_ids: list[str]) -> dict[str, tuple[str, tuple[str, ...]]]:
     if not item_ids:
         return {}
     payload = _get_json({
@@ -215,24 +215,23 @@ def _labels_for_items(item_ids: list[str]) -> dict[str, tuple[str, ...]]:
     entities = payload.get("entities")
     if not isinstance(entities, dict):
         raise ValueError("Wikidata returned no capital labels")
-    output: dict[str, tuple[str, ...]] = {}
+    output: dict[str, tuple[str, tuple[str, ...]]] = {}
     for item_id, entity in entities.items():
         if not isinstance(entity, dict):
             continue
-        names: list[str] = []
         labels = entity.get("labels", {})
         label = (
             labels.get("en", {}).get("value")
             if isinstance(labels, dict) and isinstance(labels.get("en"), dict) else None
         )
-        if label:
-            names.append(str(label))
+        canonical = str(label) if label else ""
+        aliases_found: list[str] = []
         aliases = entity.get("aliases", {})
         for alias in aliases.get("en", []) if isinstance(aliases, dict) else []:
             value = alias.get("value") if isinstance(alias, dict) else None
-            if value:
-                names.append(str(value))
-        output[str(item_id)] = tuple(sorted(set(names), key=len, reverse=True))
+            if value and str(value) != canonical:
+                aliases_found.append(str(value))
+        output[str(item_id)] = (canonical, tuple(sorted(set(aliases_found), key=len, reverse=True)))
     return output
 
 
@@ -370,11 +369,30 @@ def _verify_capital(question: str, answer: str, subject: str) -> VerificationRes
             return VerificationResult("UNVERIFIED", True, reason, source_url=subject_url)
 
         target_names = _labels_for_items(capital_ids)
-        expected = tuple(sorted(
-            {name for names in target_names.values() for name in names},
-            key=len, reverse=True,
-        ))
-        all_expected = ", ".join(sorted({name for names in target_names.values() for name in names}))
+        canonical_names = {
+            canonical
+            for canonical, _aliases in target_names.values()
+            if canonical
+        }
+        alias_names = {
+            alias
+            for _canonical, aliases in target_names.values()
+            for alias in aliases
+        }
+        expected = tuple(sorted(canonical_names | alias_names, key=len, reverse=True))
+        capital_word = "capital" if len(canonical_names) == 1 else "capitals"
+        if canonical_names:
+            capital_evidence = (
+                f"Wikidata lists the current {capital_word}: "
+                f"{', '.join(sorted(canonical_names))}."
+            )
+        else:
+            capital_evidence = "Wikidata returned no canonical English capital label."
+        if alias_names:
+            capital_evidence += (
+                " Alternate name(s)/aliases: "
+                f"{', '.join(sorted(alias_names))}."
+            )
         if not expected:
             return VerificationResult(
                 "UNVERIFIED", True,
@@ -392,20 +410,20 @@ def _verify_capital(question: str, answer: str, subject: str) -> VerificationRes
             return VerificationResult(
                 "CONTRADICTED", True,
                 f"The answer asserts a capital value ({claimed!r}) that conflicts with Wikidata for {subject}.",
-                evidence=f"Claimed value: {claimed}. Wikidata current capital value(s): {all_expected}.",
+                evidence=f"Claimed value: {claimed}. {capital_evidence}",
                 source_url=subject_url, expected_values=expected,
             )
         if matching:
             return VerificationResult(
                 "VERIFIED", True,
                 f"The answer's direct capital claim matches Wikidata for {subject}.",
-                evidence=f"Wikidata lists the current capital value(s): {all_expected}.",
+                evidence=capital_evidence,
                 source_url=subject_url, expected_values=expected,
             )
         return VerificationResult(
             "UNVERIFIED", True,
             "The answer did not make a clear affirmative capital claim that could be matched to the reference source.",
-            evidence=f"Wikidata current capital value(s): {all_expected}.",
+            evidence=capital_evidence,
             source_url=subject_url, expected_values=expected,
         )
     except (HTTPError, URLError, TimeoutError, OSError, ValueError, KeyError, TypeError,
