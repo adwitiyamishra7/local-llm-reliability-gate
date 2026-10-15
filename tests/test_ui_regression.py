@@ -20,7 +20,8 @@ import pytest
 
 APP = Path(__file__).resolve().parents[1] / "app.py"
 WANTED = {"esc", "pct_plain", "token_probability", "answer_groups", "build_view",
-          "gauge_svg", "result_html", "technical_html", "sidebar_html", "metric_card"}
+          "gauge_svg", "result_html", "technical_html", "sidebar_html", "metric_card",
+          "notice_html", "calibration_banner_html", "loading_html"}
 
 
 try:  # prefer the REAL response-quality implementation when the project is importable
@@ -52,6 +53,16 @@ def load_ui():
     module = ast.Module(body=body, type_ignores=[])
     exec(compile(module, str(APP), "exec"), ns)
     return ns
+
+
+def load_css() -> str:
+    tree = ast.parse(APP.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "CSS" for target in node.targets
+        ):
+            return ast.literal_eval(node.value)
+    raise AssertionError("CSS definition not found")
 
 
 def result(answer, probability=0.745, threshold=0.72, decision="TRUST", calibrated=True,
@@ -166,3 +177,50 @@ def test_technical_panel_labels_raw_score_diagnostic(ui):
     view = ui["build_view"](result("I don't know."), 1.0, "CPU")
     tech = ui["technical_html"](view)
     assert "diagnostic only" in tech and "Reliability reported" in tech
+
+
+def test_calibration_banner_distinguishes_preload_from_invalid_loaded_state(ui):
+    preload = ui["calibration_banner_html"](False, False, "not checked yet")
+    invalid_note = "The artifact fingerprint does not match the current configuration."
+    invalid_loaded = ui["calibration_banner_html"](True, False, invalid_note)
+    valid_loaded = ui["calibration_banner_html"](True, True, "")
+
+    assert 'class="notice info"' in preload
+    assert "Model not loaded yet" in preload
+    assert "loads automatically" in preload
+    assert "Calibration refresh required" not in preload
+    assert 'class="notice warn"' in invalid_loaded
+    assert "Calibration refresh required" in invalid_loaded
+    assert invalid_note in invalid_loaded
+    assert valid_loaded == ""
+
+
+def test_trust_and_verify_badges_are_accessible_status_labels(ui):
+    trust_view = ui["build_view"](result("William Shakespeare", 0.9), 1.0, "CPU")
+    trust_html = ui["result_html"](trust_view)
+
+    disagreement = result("Sydney", 0.99)
+    disagreement.material_disagreement = True
+    verify_view = ui["build_view"](disagreement, 1.0, "CPU")
+    verify_html = ui["result_html"](verify_view)
+
+    assert 'class="badge trust" role="status" aria-label="Final decision: TRUST"' in trust_html
+    assert 'class="badge verify" role="status" aria-label="Final decision: VERIFY"' in verify_html
+    assert 'aria-hidden="true"' in trust_html and 'aria-hidden="true"' in verify_html
+    assert '<circle cx="12" cy="12" r="9"' in verify_html
+    assert 'M16 16l4.5 4.5' not in verify_html
+    assert "Sample disagreement detected" in verify_html
+
+    css = load_css()
+    badge_rules = css[css.index(".badge {"):css.index(".thr-chip {")]
+    assert "cursor: default" in badge_rules
+    assert "box-shadow: none" in badge_rules
+    assert ".badge:hover" not in badge_rules
+
+
+def test_loading_markup_is_indeterminate_and_explicitly_ongoing(ui):
+    markup = ui["loading_html"]("Sampling 5 answers", "Still working · local inference can take a while.")
+    assert 'role="status" aria-live="polite"' in markup
+    assert "Sampling 5 answers" in markup
+    assert "Still working" in markup
+    assert "%" not in markup

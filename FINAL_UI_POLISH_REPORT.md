@@ -1,24 +1,27 @@
 # UI/UX Polish Report
 
-## Changes
+## Implemented
 
-- The pre-load calibration notice now uses an informational style and says that the model loads automatically on the first check. The warning style remains for a loaded but uncalibrated gate.
-- TRUST and VERIFY decision badges are flat, outlined, pill-shaped, and noninteractive. They have no shadow or pointer affordance.
-- The existing stage hooks are now on the live execution path. The UI reports model loading, sampling, feature extraction, classification, verification, and finalization as those backend boundaries execute. Each stage includes an indeterminate live indicator and elapsed time.
-- The question control is now a single-line `st.text_input` with `on_change`, so Enter sets the same submit path as the Check Reliability button. The existing button and clear controls remain available.
+- The pre-load calibration notice is informational and explains that the local model loads on the first submitted reliability check. After loading, a valid calibration clears the notice; an invalid calibration shows its detected reason.
+- TRUST and VERIFY remain flat, outlined status badges. Both expose `role="status"` and a final-decision label; the VERIFY icon now indicates an alert rather than an action. Their icons also use colors visible on the badge backgrounds.
+- Loading updates now follow the real execution boundaries: first-load initialization, sampling, feature extraction, classifier inference, independent verification, and finalization. A spinner, indeterminate bar, and “Still working” message remain active during a long stage. The UI does not display a stale elapsed counter or a generic stage after inference has completed.
+- The question and Check Reliability control now share a native Streamlit form. Enter submits the form; the explicit button uses that same submission path. The Clear control and example buttons remain available. Form submission avoids triggering inference merely because the text field loses focus.
+- Streamlit documents Enter in `st.text_input` as submitting its containing form: [Forms: using Enter to submit](https://docs.streamlit.io/develop/concepts/architecture/forms).
+- Gate hook cleanup now uses `finally` for every installed temporary patch, including when verification raises. Inference errors are caught by the UI, and the loaded/offline and calibration displays continue to reflect the actual gate state.
 
-## Evidence
+## Verification evidence
 
-- `python -m pytest -q -p no:cacheprovider`: **98 passed in 10.47s**.
-- `python -m py_compile app.py`: passed.
-- `git diff --check`: passed.
-- Helper interaction checks passed for button/Enter submission, pre-load informational state, post-load warning state, and calibrated empty state.
-- The staged loading path is wired through `load_and_run()` and `run_with_stage_hooks()`; no timer or fabricated percentage is used.
+- Focused UI tests: `\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider tests/test_ui_regression.py tests/test_ui_app.py` — **15 passed in 1.59s**.
+- Full suite: `\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider` — **102 passed in 7.86s**.
+- Syntax: `\.venv\Scripts\python.exe -m py_compile app.py tests\test_ui_regression.py tests\test_ui_app.py` — passed.
+- `git diff --check` — passed.
+- Streamlit AppTest ran the actual app UI with a fake gate. It confirmed the initial informational notice and no initial model construction; an empty submit showed validation and still did not construct the gate. A valid form submission constructed one fake gate, produced one result, updated the banner to the supplied fingerprint-mismatch warning, and emitted the six expected stage labels in order. A plain rerun did not execute inference again; Clear reset the input/result; a later explicit submit reused the same gate. The test also confirms temporary stage hooks are restored after the run.
+- Existing regression tests for a valid TRUST result and material-disagreement VERIFY passed in the full suite.
 
-## Scope and regressions
+## Limits and scope
 
-Only `app.py` and this report were changed. No files under `src/gate/` were modified, so decision logic, thresholds, verification scope, and model behavior remain unchanged. The existing lazy load, calibration validation, alias deduplication, TRUST path, and material-disagreement VERIFY behavior remain covered by the passing suite.
+No browser automation package or browser executable is available in this environment. AppTest exercised the native form submit control, but did not send a literal keyboard Enter event in a real browser. The AppTest gate is a deterministic fake; Qwen/GPU inference was not run. Streamlit’s native form submission is the Enter implementation, but direct browser-key and real-model timing evidence remains unavailable here.
 
-Factual accuracy for unsupported question types such as geography and biography is unchanged and remains intentionally out of scope. The model continues to fail closed where the existing gate requires verification.
+No files under `src/gate/` were changed. Gate decisions, classifier thresholds, calibration checks, verifier scope, model prompts, and model behavior are unchanged. Accuracy on unsupported geography and biography questions remains unchanged by design; the existing fail-closed VERIFY behavior remains in force.
 
-The Enter behavior uses Streamlit's supported `st.text_input` event path, which trades the former multiline textarea for a search-style single-line question field as permitted by the original request's robust implementation option.
+The starting commit/tag `e9ca699` / `v5.3-ui-polish` is preserved. This follow-up does not move or recreate that tag.

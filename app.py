@@ -5,7 +5,6 @@ import logging
 import math
 import sys
 import threading
-import time
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -217,41 +216,43 @@ html, body, .stApp {
 .card-sub { color: var(--muted); font-size: 0.92rem; margin-bottom: 4px; }
 .mini-label { font-size: 0.68rem; letter-spacing: 0.14em; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin: 2px 0 -6px; }
 
-.stTextArea textarea { font-size: 1.05rem; line-height: 1.5; color: var(--ink); background: #ffffff; }
-.stTextArea [data-baseweb="textarea"] {
+.stTextInput input { font-size: 1.05rem; line-height: 1.5; color: var(--ink); background: #ffffff; }
+.stTextInput [data-baseweb="input"] {
     border-radius: 16px; border: 1.5px solid rgba(99, 102, 241, 0.22); background: #ffffff;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
-.stTextArea [data-baseweb="base-input"] { background: #ffffff; border-radius: 16px; }
-.stTextArea [data-baseweb="textarea"]:focus-within {
+.stTextInput [data-baseweb="input"]:focus-within {
     border-color: #6366f1;
     box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14), 0 10px 26px rgba(79, 70, 229, 0.12);
 }
 
 /* ---------- buttons: secondary = chips, primary = CTA ---------- */
-.stButton > button {
+.stButton > button, .stFormSubmitButton > button {
     border-radius: 999px; border: 1px solid rgba(99, 102, 241, 0.22); background: rgba(255, 255, 255, 0.92);
     color: #334155; font-weight: 600; min-height: 2.6rem; padding: 0.5rem 1rem;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 5px 14px rgba(79, 70, 229, 0.07);
     transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, color 0.22s ease;
 }
-.stButton > button:hover {
+.stButton > button:hover, .stFormSubmitButton > button:hover {
     transform: translateY(-3px); border-color: #6366f1; color: #4338ca;
     box-shadow: 0 10px 24px rgba(79, 70, 229, 0.18);
 }
-.stButton > button p { font-size: 0.84rem; line-height: 1.25; margin: 0; white-space: normal; }
+.stButton > button p, .stFormSubmitButton > button p { font-size: 0.84rem; line-height: 1.25; margin: 0; white-space: normal; }
 .stButton > button[kind="primary"],
+.stFormSubmitButton > button[kind="primary"],
 .stButton > button[data-testid="stBaseButton-primary"] {
     min-height: 3.3rem; border: none; color: #ffffff;
     background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #06b6d4 120%);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 12px 28px rgba(79, 70, 229, 0.38);
 }
 .stButton > button[kind="primary"]:hover,
+.stFormSubmitButton > button[kind="primary"]:hover,
 .stButton > button[data-testid="stBaseButton-primary"]:hover {
     color: #ffffff; transform: translateY(-3px) scale(1.01);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 18px 38px rgba(79, 70, 229, 0.45);
 }
 .stButton > button[kind="primary"] p,
+.stFormSubmitButton > button[kind="primary"] p,
 .stButton > button[data-testid="stBaseButton-primary"] p { color: #ffffff; font-size: 1.02rem; font-weight: 700; letter-spacing: 0.01em; }
 
 /* ---------- generic cards ---------- */
@@ -700,10 +701,6 @@ def run_with_stage_hooks(gate: ReliabilityGate, question: str, on_stage) -> dict
     original_predict_proba = model.predict_proba
     original_build_features = gate._build_features
     original_consensus = gate._select_consensus
-    had_predict_proba = "predict_proba" in vars(model)
-    had_build_features = "_build_features" in vars(gate)
-    had_consensus = "_select_consensus" in vars(gate)
-
     def tracked_sampling(*args, **kwargs):
         on_stage(f"Sampling {N_SAMPLES} answers")
         return original_sample(*args, **kwargs)
@@ -724,32 +721,32 @@ def run_with_stage_hooks(gate: ReliabilityGate, question: str, on_stage) -> dict
 
     def tracked_verification(*args, **kwargs):
         on_stage("Running independent verification")
-        verification = original_verify(*args, **kwargs)
-        on_stage("Finalizing the recommendation")
-        return verification
+        try:
+            return original_verify(*args, **kwargs)
+        finally:
+            on_stage("Finalizing the recommendation")
 
-    gate_module.sample_answers = tracked_sampling
-    gate_module.verify_answer = tracked_verification
-    model.predict_proba = tracked_classification
-    gate._build_features = tracked_features
-    gate._select_consensus = tracked_consensus
+    patches = []
+
+    def install_patch(target, name, replacement):
+        had_instance_value = name in vars(target)
+        previous_value = getattr(target, name)
+        patches.append((target, name, had_instance_value, previous_value))
+        setattr(target, name, replacement)
+
     try:
+        install_patch(gate_module, "sample_answers", tracked_sampling)
+        install_patch(gate_module, "verify_answer", tracked_verification)
+        install_patch(model, "predict_proba", tracked_classification)
+        install_patch(gate, "_build_features", tracked_features)
+        install_patch(gate, "_select_consensus", tracked_consensus)
         return run_check(gate, question)
     finally:
-        gate_module.sample_answers = original_sample
-        gate_module.verify_answer = original_verify
-        if had_predict_proba:
-            model.predict_proba = original_predict_proba
-        else:
-            delattr(model, "predict_proba")
-        if had_build_features:
-            gate._build_features = original_build_features
-        else:
-            delattr(gate, "_build_features")
-        if had_consensus:
-            gate._select_consensus = original_consensus
-        else:
-            delattr(gate, "_select_consensus")
+        for target, name, had_instance_value, previous_value in reversed(patches):
+            if had_instance_value:
+                setattr(target, name, previous_value)
+            else:
+                delattr(target, name)
 
 
 def load_and_run(gate_was_loaded: bool, question: str, on_stage):
@@ -758,16 +755,7 @@ def load_and_run(gate_was_loaded: bool, question: str, on_stage):
     gate, error = ensure_gate()
     if gate is None:
         return None, error, None
-    on_stage("Starting reliability check")
     return gate, None, run_with_stage_hooks(gate, question, on_stage)
-
-
-def request_submit() -> None:
-    st.session_state["submit_requested"] = True
-
-
-def submit_requested(button_clicked: bool, enter_requested: bool) -> bool:
-    return bool(button_clicked or enter_requested)
 
 
 # ============================================================
@@ -840,7 +828,7 @@ def calibration_banner_html(loaded: bool, calibrated: bool, note: str) -> str:
 
 
 def loading_html(title: str, detail: str) -> str:
-    """Render one real pipeline stage with elapsed time and an indeterminate animation."""
+    """Render one real pipeline stage with an honest ongoing activity indicator."""
     return f"""
     <div class="loading card" role="status" aria-live="polite">
         <div class="spin" aria-hidden="true"></div>
@@ -951,8 +939,8 @@ def result_html(view: dict) -> str:
     if decision == "TRUST":
         icon = (
             '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">'
-            '<path d="M12 2.5l8 3v6.2c0 4.6-3.2 8.3-8 9.8-4.8-1.5-8-5.2-8-9.8V5.5l8-3z" fill="rgba(255,255,255,.25)" stroke="#fff" stroke-width="1.6"/>'
-            '<path d="M8.2 12.2l2.6 2.6 5-5.4" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+            '<path d="M12 2.5l8 3v6.2c0 4.6-3.2 8.3-8 9.8-4.8-1.5-8-5.2-8-9.8V5.5l8-3z" stroke="#047857" stroke-width="1.8"/>'
+            '<path d="M8.2 12.2l2.6 2.6 5-5.4" stroke="#047857" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
         )
         message = (
             "<b>Trust recommended.</b> The sampled answers and token confidence "
@@ -962,8 +950,8 @@ def result_html(view: dict) -> str:
     else:
         icon = (
             '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">'
-            '<circle cx="11" cy="11" r="6.5" stroke="#451a03" stroke-width="2"/>'
-            '<path d="M16 16l4.5 4.5" stroke="#451a03" stroke-width="2.2" stroke-linecap="round"/></svg>'
+            '<circle cx="12" cy="12" r="9" stroke="#92400e" stroke-width="2"/>'
+            '<path d="M12 7.5v5.2M12 16.5h.01" stroke="#92400e" stroke-width="2.2" stroke-linecap="round"/></svg>'
         )
         if not view.get("calibrated", True):
             message = (
@@ -1087,7 +1075,7 @@ def result_html(view: dict) -> str:
                 {raw_output_html}
                 {verification_html}
                 <div class="badge-row">
-                    <div class="badge {state}">{icon}{decision}</div>
+                    <div class="badge {state}" role="status" aria-label="Final decision: {decision}">{icon}{decision}</div>
                     <div class="thr-chip">{chip_text}</div>
                 </div>
                 <div class="decision-msg">{message}</div>
@@ -1392,13 +1380,18 @@ with input_box:
         """
     )
 
-    st.text_input(
-        "Question",
-        key="question_input",
-        placeholder="Ask a factual question...",
-        label_visibility="collapsed",
-        on_change=request_submit,
-    )
+    with st.form("reliability_form", clear_on_submit=False):
+        st.text_input(
+            "Question",
+            key="question_input",
+            placeholder="Ask a factual question...",
+            label_visibility="collapsed",
+        )
+        run_clicked = st.form_submit_button(
+            "Check Reliability",
+            type="primary",
+            use_container_width=True,
+        )
 
     render('<div class="mini-label">Try an example</div>')
 
@@ -1413,13 +1406,7 @@ with input_box:
                 use_container_width=True,
             )
 
-    cta_column, clear_column = st.columns([4, 1])
-    with cta_column:
-        run_clicked = st.button(
-            "Check Reliability",
-            type="primary",
-            use_container_width=True,
-        )
+    _, clear_column = st.columns([4, 1])
     with clear_column:
         st.button("Clear", on_click=clear_all, use_container_width=True)
 
@@ -1429,10 +1416,7 @@ with input_box:
 notice_slot = st.empty()
 status_slot = st.empty()
 
-enter_requested = bool(st.session_state.pop("submit_requested", False))
-run_requested = submit_requested(run_clicked, enter_requested)
-
-if run_requested:
+if run_clicked:
     question_text = st.session_state.get("question_input", "").strip()
     state = process_state()
 
@@ -1463,25 +1447,67 @@ if run_requested:
 
     else:
         try:
-            started_loading = time.monotonic()
+            gate = None
+            new_view = None
+            hero_slot.markdown(html_block(hero_html("loading")), unsafe_allow_html=True)
 
             def show_stage(stage: str) -> None:
-                elapsed = time.monotonic() - started_loading
                 status_slot.markdown(
                     html_block(
                         loading_html(
                             stage,
-                            f"Still working · elapsed {elapsed:.1f}s · local inference",
+                            "Still working · local inference can take a while.",
                         )
                     ),
                     unsafe_allow_html=True,
                 )
 
-            gate, load_error, new_view = load_and_run(state["loaded"], question_text, show_stage)
+            try:
+                gate, load_error, new_view = load_and_run(
+                    state["loaded"], question_text, show_stage
+                )
+                if gate is not None and new_view is None:
+                    raise ValueError("The reliability gate returned no result.")
+            except (AttributeError, TypeError, ValueError, KeyError) as exc:
+                logger.exception("Gate returned an unexpected result")
+                gate = None
+                st.session_state["result"] = None
+                load_error = {
+                    "title": "Unexpected result",
+                    "body": "The gate returned a result the interface could not read. Please try again.",
+                    "detail": f"{type(exc).__name__}: {exc}",
+                }
+            except Exception as exc:
+                logger.exception("Inference failed")
+                gate = None
+                st.session_state["result"] = None
 
-            if gate is not None and gate.calibrated:
+                if "out of memory" in str(exc).lower():
+                    title = "GPU memory is full"
+                    body = (
+                        "The 4 GB GPU ran out of memory during generation. Close other "
+                        "GPU-heavy applications and try again."
+                    )
+                    if torch is not None:
+                        try:
+                            torch.cuda.empty_cache()
+                        except Exception:
+                            pass
+                else:
+                    title = "The gate could not finish"
+                    body = (
+                        "Something went wrong while generating or scoring the answers. "
+                        "Please try again."
+                    )
+                load_error = {
+                    "title": title,
+                    "body": body,
+                    "detail": f"{type(exc).__name__}: {exc}",
+                }
+
+            if state["loaded"] and state["calibrated"]:
                 calibration_slot.empty()
-            elif gate is not None:
+            elif state["loaded"]:
                 calibration_slot.markdown(
                     html_block(
                         notice_html(
@@ -1494,7 +1520,11 @@ if run_requested:
                 )
 
             if gate is None:
-                hero_slot.markdown(html_block(hero_html("offline")), unsafe_allow_html=True)
+                hero_status = "online" if state["loaded"] else "offline"
+                hero_slot.markdown(
+                    html_block(hero_html(hero_status, state["runtime"])),
+                    unsafe_allow_html=True,
+                )
                 notice_slot.markdown(
                     html_block(
                         notice_html(
@@ -1510,76 +1540,18 @@ if run_requested:
                     html_block(hero_html("online", runtime_label(gate))),
                     unsafe_allow_html=True,
                 )
-                status_slot.markdown(
-                    html_block(
-                        loading_html(
-                            "Running the reliability gate…",
-                            f"Generating {N_SAMPLES} sampled answers locally, then scoring them. "
-                            "No cloud API involved.",
-                        )
-                    ),
-                    unsafe_allow_html=True,
-                )
-
-                try:
-                    if new_view is None:
-                        raise RuntimeError("The reliability gate returned no result.")
-
-                except (AttributeError, TypeError, ValueError, KeyError):
-                    logger.exception("Gate returned an unexpected result")
-                    st.session_state["result"] = None
-                    notice_slot.markdown(
-                        html_block(
-                            notice_html(
-                                "error",
-                                "Unexpected result",
-                                "The gate returned a result the interface could not read. "
-                                "Please try again.",
-                            )
-                        ),
-                        unsafe_allow_html=True,
-                    )
-
-                except Exception as exc:
-                    logger.exception("Inference failed")
-                    st.session_state["result"] = None
-
-                    if "out of memory" in str(exc).lower():
-                        title = "GPU memory is full"
-                        body = (
-                            "The 4 GB GPU ran out of memory during generation. Close other "
-                            "GPU-heavy applications and try again."
-                        )
-                        if torch is not None:
-                            try:
-                                torch.cuda.empty_cache()
-                            except Exception:
-                                pass
-                    else:
-                        title = "The gate could not finish"
-                        body = (
-                            "Something went wrong while generating or scoring the answers. "
-                            "Please try again."
-                        )
-
-                    notice_slot.markdown(
-                        html_block(notice_html("error", title, body)),
-                        unsafe_allow_html=True,
-                    )
-
-                else:
-                    st.session_state["result"] = new_view
-                    st.session_state["history"] = (
-                        [
-                            {
-                                "question": new_view["question"],
-                                "decision": new_view["decision"],
-                                "probability": new_view["probability"],
-                                "score_valid": new_view["score_valid"],
-                            }
-                        ]
-                        + st.session_state["history"]
-                    )[:HISTORY_LIMIT]
+                st.session_state["result"] = new_view
+                st.session_state["history"] = (
+                    [
+                        {
+                            "question": new_view["question"],
+                            "decision": new_view["decision"],
+                            "probability": new_view["probability"],
+                            "score_valid": new_view["score_valid"],
+                        }
+                    ]
+                    + st.session_state["history"]
+                )[:HISTORY_LIMIT]
 
         finally:
             status_slot.empty()
@@ -1588,7 +1560,7 @@ if run_requested:
 
 # ---------------- model-load error detail ----------------
 
-if load_error is not None and not run_requested:
+if load_error is not None and not run_clicked:
     render(notice_html("error", load_error["title"], load_error["body"]))
     with st.expander("Error message"):
         st.code(load_error["detail"], language="text")
