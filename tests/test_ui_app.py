@@ -99,7 +99,9 @@ def test_streamlit_form_submission_updates_status_and_runs_once(monkeypatch):
 
     stages: list[str] = []
     loading_markup: list[str] = []
+    stylesheet_markup: list[str] = []
     original_markdown = DeltaGenerator.markdown
+    original_html = streamlit.html
 
     def record_loading(self, body, *args, **kwargs):
         if isinstance(body, str) and 'class="loading card"' in body:
@@ -109,7 +111,13 @@ def test_streamlit_form_submission_updates_status_and_runs_once(monkeypatch):
                 stages.append(html.unescape(match.group(1)))
         return original_markdown(self, body, *args, **kwargs)
 
+    def record_stylesheet(body, *args, **kwargs):
+        if isinstance(body, str) and "<style>" in body and "--indigo:" in body:
+            stylesheet_markup.append(body)
+        return original_html(body, *args, **kwargs)
+
     monkeypatch.setattr(DeltaGenerator, "markdown", record_loading)
+    monkeypatch.setattr(streamlit, "html", record_stylesheet)
     streamlit.cache_resource.clear()
 
     try:
@@ -120,6 +128,8 @@ def test_streamlit_form_submission_updates_status_and_runs_once(monkeypatch):
         assert "Model not loaded yet" in initial_markup
         assert "Calibration refresh required" not in initial_markup
         assert metrics["constructed"] == 0  # first render stays lazy
+        assert len(stylesheet_markup) == 1
+        assert "@media (max-width: 640px)" in stylesheet_markup[0]
 
         # Empty form submission takes the UI validation path and never constructs a gate.
         app.text_input[0].set_value("   ")

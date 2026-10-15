@@ -224,3 +224,26 @@ def test_loading_markup_is_indeterminate_and_explicitly_ongoing(ui):
     assert "Sampling 5 answers" in markup
     assert "Still working" in markup
     assert "%" not in markup
+
+
+def test_global_stylesheet_has_direct_injection_and_responsive_accessible_rules():
+    tree = ast.parse(APP.read_text(encoding="utf-8"))
+    direct_css_calls = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "st"
+        and node.func.attr == "html"
+        and node.args
+        and isinstance(node.args[0], ast.Name)
+        and node.args[0].id == "CSS"
+    ]
+    assert direct_css_calls, "The global CSS must be injected as HTML, not Markdown."
+
+    css = load_css()
+    assert '[data-testid="stFormSubmitButton"] button' in css
+    assert ":focus-visible" in css
+    assert "@media (max-width: 640px)" in css
+    assert "@media (prefers-reduced-motion: reduce)" in css
+    assert ".rc-wrap.verify" in css and ".verification-note.verified" in css
