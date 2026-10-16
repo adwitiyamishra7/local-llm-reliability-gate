@@ -448,6 +448,14 @@ def _percent_of_expected(question: str) -> float | None:
     return float(match.group(1)) * float(match.group(2)) / 100.0
 
 
+def get_question_kind(question: str) -> str:
+    """Expose the verifier's existing supported-question parsing for result metadata."""
+    question = str(question or "").strip()
+    if _percent_of_expected(question) is not None or _capital_question_subject(question):
+        return "factual"
+    return "unsupported"
+
+
 def _verify_percent_math(question: str, answer: str, expected: float) -> VerificationResult:
     claims = re.findall(r"(?:is|equals?)\s*([-+]?\d+(?:\.\d+)?)|=\s*([-+]?\d+(?:\.\d+)?)", answer, flags=re.I)
     values = [next(value for value in match if value) for match in claims]

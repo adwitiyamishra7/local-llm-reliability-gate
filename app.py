@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import logging
 import math
+import re
 import sys
 import threading
 from collections import Counter
@@ -88,542 +89,387 @@ METRIC_NOTES = {
 # STYLES
 # ============================================================
 
+THEMES = {
+    "daylight": {
+        "label": "Daylight", "--bg": "#f4f7fd", "--surface": "#ffffff",
+        "--surface-2": "#eaf0fb", "--border": "#d6e0f2", "--text": "#0b1a33",
+        "--muted": "#4a5b78", "--accent": "#2563eb", "--accent-2": "#0369a1",
+        "--on-accent": "#ffffff", "--trust": "#047857", "--verify": "#b45309",
+        "--error": "#be123c", "--info": "#0369a1",
+        "--trust-bg": "rgba(4,120,87,0.08)", "--trust-bd": "rgba(4,120,87,0.28)",
+        "--verify-bg": "rgba(180,83,9,0.08)", "--verify-bd": "rgba(180,83,9,0.28)",
+        "--error-bg": "rgba(190,18,60,0.08)", "--error-bd": "rgba(190,18,60,0.28)",
+        "--info-bg": "rgba(3,105,161,0.08)", "--info-bd": "rgba(3,105,161,0.28)",
+        "--track": "#dbe4f5", "--shadow": "0 1px 2px rgba(16,24,40,.06), 0 12px 32px rgba(16,24,40,.08)",
+        "--hairline": "rgba(255,255,255,.7)", "--glow-1": "rgba(37,99,235,.10)",
+        "--glow-2": "rgba(3,105,161,.08)", "--code-bg": "#eef3fc", "color-scheme": "light",
+    },
+    "ivory": {
+        "label": "Ivory", "--bg": "#faf6ef", "--surface": "#fffdf9",
+        "--surface-2": "#f3ece0", "--border": "#e5dccd", "--text": "#241a14",
+        "--muted": "#6a5a4d", "--accent": "#86198f", "--accent-2": "#be185d",
+        "--on-accent": "#ffffff", "--trust": "#047857", "--verify": "#a15c07",
+        "--error": "#b91c1c", "--info": "#0e7490",
+        "--trust-bg": "rgba(4,120,87,0.08)", "--trust-bd": "rgba(4,120,87,0.28)",
+        "--verify-bg": "rgba(161,92,7,0.08)", "--verify-bd": "rgba(161,92,7,0.28)",
+        "--error-bg": "rgba(185,28,28,0.08)", "--error-bd": "rgba(185,28,28,0.28)",
+        "--info-bg": "rgba(14,116,144,0.08)", "--info-bd": "rgba(14,116,144,0.28)",
+        "--track": "#eadfce", "--shadow": "0 1px 2px rgba(60,40,20,.06), 0 12px 32px rgba(60,40,20,.09)",
+        "--hairline": "rgba(255,255,255,.8)", "--glow-1": "rgba(190,24,93,.08)",
+        "--glow-2": "rgba(134,25,143,.06)", "--code-bg": "#f6efe3", "color-scheme": "light",
+    },
+    "midnight": {
+        "label": "Midnight", "--bg": "#080c18", "--surface": "#111729",
+        "--surface-2": "#182038", "--border": "#26304d", "--text": "#f3efe4",
+        "--muted": "#a4abc0", "--accent": "#f2c14e", "--accent-2": "#ffd98a",
+        "--on-accent": "#1b1405", "--trust": "#4ade80", "--verify": "#fb923c",
+        "--error": "#fb7185", "--info": "#38bdf8",
+        "--trust-bg": "rgba(74,222,128,0.12)", "--trust-bd": "rgba(74,222,128,0.35)",
+        "--verify-bg": "rgba(251,146,60,0.12)", "--verify-bd": "rgba(251,146,60,0.35)",
+        "--error-bg": "rgba(251,113,133,0.12)", "--error-bd": "rgba(251,113,133,0.35)",
+        "--info-bg": "rgba(56,189,248,0.12)", "--info-bd": "rgba(56,189,248,0.35)",
+        "--track": "#232c47", "--shadow": "0 14px 44px rgba(0,0,0,.5)",
+        "--hairline": "rgba(255,255,255,.06)", "--glow-1": "rgba(242,193,78,.10)",
+        "--glow-2": "rgba(56,189,248,.06)", "--code-bg": "#0d1324", "color-scheme": "dark",
+    },
+}
+
+
+def theme_css(name: str) -> str:
+    theme = THEMES[str(name).strip().lower()]
+    declarations = "".join(
+        f"{token}:{value};" for token, value in theme.items()
+        if token.startswith("--")
+    )
+    return f"<style>:root{{{declarations}color-scheme:{theme['color-scheme']};}}</style>"
+
+
 CSS = """
 <style>
 :root {
-    --ink: #0f172a;
-    --muted: #64748b;
-    --line: rgba(99, 102, 241, 0.16);
-    --indigo: #4f46e5;
-    --violet: #7c3aed;
-    --cyan: #06b6d4;
-    --trust: #059669;
+    --bg: #f4f7fd;
+    --surface: #ffffff;
+    --surface-2: #eaf0fb;
+    --border: #d6e0f2;
+    --text: #0b1a33;
+    --muted: #4a5b78;
+    --accent: #2563eb;
+    --accent-2: #0369a1;
+    --on-accent: #ffffff;
+    --trust: #047857;
     --verify: #b45309;
-    --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(79, 70, 229, 0.08);
-    --shadow-2: 0 2px 4px rgba(15, 23, 42, 0.04), 0 14px 34px rgba(79, 70, 229, 0.12), 0 34px 70px rgba(79, 70, 229, 0.10);
+    --error: #be123c;
+    --info: #0369a1;
+    --trust-bg: rgba(4,120,87,0.08);
+    --trust-bd: rgba(4,120,87,0.28);
+    --verify-bg: rgba(180,83,9,0.08);
+    --verify-bd: rgba(180,83,9,0.28);
+    --error-bg: rgba(190,18,60,0.08);
+    --error-bd: rgba(190,18,60,0.28);
+    --info-bg: rgba(3,105,161,0.08);
+    --info-bd: rgba(3,105,161,0.28);
+    --track: #dbe4f5;
+    --shadow: 0 1px 2px rgba(16,24,40,.06), 0 12px 32px rgba(16,24,40,.08);
+    --hairline: rgba(255,255,255,.7);
+    --glow-1: rgba(37,99,235,.10);
+    --glow-2: rgba(3,105,161,.08);
+    --code-bg: #eef3fc;
+    --grad: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color-scheme: light;
 }
 
 html, body, .stApp {
-    color-scheme: light;
-    font-family: "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-}
-
-.stApp {
-    color: var(--ink);
-    background:
-        radial-gradient(circle at 1px 1px, rgba(99, 102, 241, 0.09) 1px, transparent 0) 0 0 / 30px 30px,
-        linear-gradient(160deg, #f8faff 0%, #f1f4ff 45%, #eefbff 100%);
-}
-
-[data-testid="stHeader"] { background: transparent; }
-#MainMenu, footer { visibility: hidden; }
-[data-testid="InputInstructions"] { display: none; }
-
-.block-container {
-    position: relative;
-    z-index: 1;
-    max-width: 1180px;
-    padding-top: 1.6rem;
-    padding-bottom: 3rem;
-}
-
-/* ---------- background orbs ---------- */
-.orbs { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
-.orb { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.55; animation: drift 20s ease-in-out infinite; }
-.orb.a { width: 420px; height: 420px; background: #c7d2fe; top: -140px; left: -90px; }
-.orb.b { width: 380px; height: 380px; background: #a5f3fc; top: 32%; right: -130px; animation-duration: 26s; }
-.orb.c { width: 340px; height: 340px; background: #ddd6fe; bottom: -140px; left: 38%; animation-duration: 23s; }
-
-@keyframes drift {
-    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-    50% { transform: translate3d(30px, -26px, 0) scale(1.08); }
-}
-@keyframes bob {
-    0%, 100% { transform: translateY(0) rotate(-1deg); }
-    50% { transform: translateY(-6px) rotate(1deg); }
-}
-@keyframes ping {
-    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45); }
-    80%, 100% { box-shadow: 0 0 0 9px rgba(16, 185, 129, 0); }
-}
-@keyframes rise {
-    from { opacity: 0; transform: translateY(18px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-@keyframes flow {
-    0% { background-position: 0% 50%; }
-    100% { background-position: 200% 50%; }
-}
-@keyframes ringfill {
-    from { stroke-dashoffset: var(--circ); }
-    to { stroke-dashoffset: var(--off); }
-}
-@keyframes grow {
-    from { width: 0; }
-    to { width: var(--w); }
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes wave {
-    0%, 100% { opacity: 0.35; transform: translateX(0); }
-    50% { opacity: 1; transform: translateX(4px); }
-}
-@keyframes slide {
-    0% { left: -40%; }
-    100% { left: 100%; }
-}
-
-/* ---------- hero ---------- */
-.hero { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 4px 2px 20px; }
-.brand { display: flex; align-items: center; gap: 16px; }
-.logo {
-    width: 62px; height: 62px; border-radius: 19px; display: grid; place-items: center;
-    background: linear-gradient(145deg, #ffffff, #e9edff);
-    border: 1px solid rgba(255, 255, 255, 0.95);
-    box-shadow: inset 0 1px 0 #fff, 0 12px 26px rgba(79, 70, 229, 0.28), 0 3px 8px rgba(79, 70, 229, 0.14);
-    animation: bob 6s ease-in-out infinite;
-}
-.eyebrow { font-size: 0.7rem; letter-spacing: 0.16em; font-weight: 700; color: var(--indigo); text-transform: uppercase; }
-.title {
-    font-size: 2.1rem; line-height: 1.12; font-weight: 800; letter-spacing: -0.02em; margin: 3px 0 2px;
-    background: linear-gradient(90deg, #0f172a, #312e81 55%, #4f46e5);
-    -webkit-background-clip: text; background-clip: text;
-    color: transparent; -webkit-text-fill-color: transparent;
-}
-.subtitle { color: var(--muted); font-size: 1.02rem; }
-.status-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.pill {
-    display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
-    background: rgba(255, 255, 255, 0.82); border: 1px solid var(--line); box-shadow: var(--shadow-1);
-    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; color: #334155; backdrop-filter: blur(8px);
-}
-.dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; animation: ping 2s infinite; }
-.dot.loading { background: #f59e0b; animation: none; }
-.dot.off { background: #ef4444; animation: none; }
-
-/* ---------- input card ---------- */
-.st-key-input_card {
-    background: rgba(255, 255, 255, 0.78);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.95);
-    outline: 1px solid var(--line);
-    border-radius: 26px;
-    padding: 26px 28px 22px;
-    box-shadow: var(--shadow-2);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-.st-key-input_card:hover { transform: translateY(-3px); }
-.card-head { font-size: 1.35rem; font-weight: 750; letter-spacing: -0.01em; margin-bottom: 2px; }
-.card-sub { color: var(--muted); font-size: 0.92rem; margin-bottom: 4px; }
-.mini-label { font-size: 0.68rem; letter-spacing: 0.14em; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin: 2px 0 -6px; }
-
-.stTextInput input { font-size: 1.05rem; line-height: 1.5; color: var(--ink); background: #ffffff; }
-.stTextInput [data-baseweb="input"] {
-    border-radius: 16px; border: 1.5px solid rgba(99, 102, 241, 0.22); background: #ffffff;
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-.stTextInput [data-baseweb="input"]:focus-within {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14), 0 10px 26px rgba(79, 70, 229, 0.12);
-}
-
-/* ---------- buttons: secondary = chips, primary = CTA ---------- */
-.stButton > button, .stFormSubmitButton > button {
-    border-radius: 999px; border: 1px solid rgba(99, 102, 241, 0.22); background: rgba(255, 255, 255, 0.92);
-    color: #334155; font-weight: 600; min-height: 2.6rem; padding: 0.5rem 1rem;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 5px 14px rgba(79, 70, 229, 0.07);
-    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, color 0.22s ease;
-}
-.stButton > button:hover, .stFormSubmitButton > button:hover {
-    transform: translateY(-3px); border-color: #6366f1; color: #4338ca;
-    box-shadow: 0 10px 24px rgba(79, 70, 229, 0.18);
-}
-.stButton > button p, .stFormSubmitButton > button p { font-size: 0.84rem; line-height: 1.25; margin: 0; white-space: normal; }
-.stButton > button[kind="primary"],
-.stFormSubmitButton > button[kind="primary"],
-.stButton > button[data-testid="stBaseButton-primary"] {
-    min-height: 3.3rem; border: none; color: #ffffff;
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #06b6d4 120%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 12px 28px rgba(79, 70, 229, 0.38);
-}
-.stButton > button[kind="primary"]:hover,
-.stFormSubmitButton > button[kind="primary"]:hover,
-.stButton > button[data-testid="stBaseButton-primary"]:hover {
-    color: #ffffff; transform: translateY(-3px) scale(1.01);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 18px 38px rgba(79, 70, 229, 0.45);
-}
-.stButton > button[kind="primary"] p,
-.stFormSubmitButton > button[kind="primary"] p,
-.stButton > button[data-testid="stBaseButton-primary"] p { color: #ffffff; font-size: 1.02rem; font-weight: 700; letter-spacing: 0.01em; }
-
-/* ---------- generic cards ---------- */
-.card {
-    background: rgba(255, 255, 255, 0.86); backdrop-filter: blur(14px); border: 1px solid var(--line);
-    border-radius: 22px; box-shadow: var(--shadow-1);
-}
-.section-title { font-size: 1.28rem; font-weight: 750; letter-spacing: -0.01em; margin: 38px 0 2px; }
-.section-sub { color: var(--muted); font-size: 0.92rem; margin-bottom: 16px; }
-
-/* ---------- notices ---------- */
-.notice { display: flex; gap: 12px; align-items: flex-start; padding: 14px 18px; border-radius: 16px; margin-top: 16px; border: 1px solid; animation: rise 0.4s ease both; }
-.notice.info { background: #eef2ff; border-color: #c7d2fe; color: #3730a3; }
-.notice.warn { background: #fffbeb; border-color: #fde68a; color: #78350f; }
-.notice.error { background: #fff1f2; border-color: #fecdd3; color: #881337; }
-.notice b { display: block; margin-bottom: 2px; }
-.notice span { font-size: 0.92rem; }
-
-/* ---------- loading ---------- */
-.loading { position: relative; overflow: hidden; display: flex; gap: 22px; align-items: center; padding: 26px 28px; margin-top: 24px; box-shadow: var(--shadow-2); animation: rise 0.4s ease both; }
-.spin { flex: none; width: 54px; height: 54px; border-radius: 50%; border: 5px solid #e0e7ff; border-top-color: #6366f1; border-right-color: #06b6d4; animation: spin 1s linear infinite; }
-.ltitle { font-size: 1.15rem; font-weight: 750; }
-.lsub { color: var(--muted); font-size: 0.9rem; margin-bottom: 10px; }
-.lsteps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.lsteps li { font-size: 0.93rem; color: #334155; display: flex; gap: 10px; align-items: center; animation: wave 2.4s ease-in-out infinite; animation-delay: var(--d); }
-.lsteps li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #06b6d4); }
-.lbar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: #eef2ff; }
-.lbar::after { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 4px; background: linear-gradient(90deg, #6366f1, #06b6d4); animation: slide 1.6s ease-in-out infinite; }
-
-/* ---------- empty state ---------- */
-.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; margin-top: 26px; }
-.step { position: relative; padding: 22px; transition: transform 0.3s ease, box-shadow 0.3s ease; animation: rise 0.6s ease both; }
-.step:hover { transform: translateY(-6px); box-shadow: var(--shadow-2); }
-.step-num { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; font-weight: 800; color: #fff; margin-bottom: 12px; background: linear-gradient(135deg, #4f46e5, #06b6d4); box-shadow: 0 8px 18px rgba(79, 70, 229, 0.3); }
-.step-title { font-weight: 750; margin-bottom: 4px; }
-.step-text { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
-
-/* ---------- result card ---------- */
-.rc-wrap {
-    --c1: #10b981; --c2: #06b6d4;
-    margin: 26px 0 40px; padding: 2px; border-radius: 30px;
-    background: linear-gradient(120deg, var(--c1), var(--c2), var(--c1)); background-size: 200% 200%;
-    animation: flow 7s linear infinite, rise 0.6s ease both;
-    box-shadow: 0 12px 0 -6px rgba(255, 255, 255, 0.8), 0 24px 0 -12px rgba(255, 255, 255, 0.55), 0 34px 70px rgba(79, 70, 229, 0.16);
-    transition: transform 0.35s ease;
-}
-.rc-wrap:hover { transform: translateY(-5px); }
-.rc-wrap.verify { --c1: #f59e0b; --c2: #fb923c; }
-.rc {
-    display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 30px; padding: 32px;
-    border-radius: 28px; background: linear-gradient(180deg, #ffffff, #fafbff);
-}
-@media (max-width: 860px) { .rc { grid-template-columns: minmax(0, 1fr); padding: 24px; } }
-.qecho { color: var(--muted); font-size: 0.92rem; margin-bottom: 18px; word-break: break-word; }
-.qecho b { color: #334155; }
-.answer { font-size: 1.9rem; line-height: 1.25; font-weight: 750; letter-spacing: -0.015em; margin: 6px 0 22px; word-break: break-word; }
-.badge-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
-.badge { display: inline-flex; align-items: center; gap: 9px; padding: 9px 16px; border-radius: 999px; font-weight: 800; font-size: 1.02rem; letter-spacing: 0.08em; cursor: default; user-select: none; box-shadow: none; }
-.badge.trust { color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; }
-.badge.verify { color: #92400e; background: #fffbeb; border: 1px solid #fcd34d; }
-.badge svg { width: 20px; height: 20px; flex: none; }
-.thr-chip { padding: 8px 14px; border-radius: 12px; background: #f1f5ff; border: 1px solid var(--line); font-size: 0.85rem; font-weight: 650; color: #334155; }
-.decision-msg { color: #334155; font-size: 0.97rem; line-height: 1.55; margin-bottom: 14px; }
-.disclaimer { color: var(--muted); font-size: 0.8rem; line-height: 1.5; border-top: 1px dashed rgba(99, 102, 241, 0.25); padding-top: 12px; }
-
-.gauge-col { display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.gauge { width: 100%; max-width: 290px; filter: drop-shadow(0 16px 24px rgba(79, 70, 229, 0.16)); }
-.ring-prog { animation: ringfill 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.meter { position: relative; width: 100%; max-width: 320px; height: 12px; border-radius: 99px; background: #e8ecfb; margin: 22px 0 8px; }
-.meter-fill { height: 100%; border-radius: 99px; width: var(--w); animation: grow 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.meter-fill.trust { background: linear-gradient(90deg, #34d399, #06b6d4); }
-.meter-fill.verify { background: linear-gradient(90deg, #fcd34d, #f97316); }
-.meter-mark { position: absolute; top: -6px; width: 3px; height: 24px; border-radius: 3px; background: #0f172a; transform: translateX(-1px); }
-.meter-mark span { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); font-size: 0.7rem; font-weight: 700; color: #475569; }
-.meter-cap { margin-top: 22px; font-size: 0.95rem; font-weight: 700; color: #334155; text-align: center; }
-.meter-cap em { font-style: normal; }
-.meter-cap .trust { color: var(--trust); }
-.meter-cap .verify { color: var(--verify); }
-
-/* ---------- metric cards ---------- */
-.grid5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
-.mcard {
-    --accent: #6366f1; position: relative; overflow: hidden; padding: 18px 18px 16px; background: #fff;
-    border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow-1);
-    transition: transform 0.28s ease, box-shadow 0.28s ease; animation: rise 0.6s ease both; cursor: default;
-}
-.mcard::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: linear-gradient(90deg, var(--accent), transparent); }
-.mcard:hover { transform: translateY(-7px); box-shadow: var(--shadow-2); }
-.mlabel { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.06em; color: #64748b; text-transform: uppercase; min-height: 2.1em; }
-.mvalue { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 8px; font-variant-numeric: tabular-nums; }
-.mbar { height: 7px; border-radius: 99px; background: #eef2ff; margin-bottom: 10px; overflow: hidden; }
-.mbar i { display: block; height: 100%; width: var(--w); border-radius: 99px; background: linear-gradient(90deg, var(--accent), #06b6d4); animation: grow 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.msub { font-size: 0.78rem; font-weight: 650; color: #334155; margin-bottom: 6px; }
-.mnote { font-size: 0.8rem; color: var(--muted); line-height: 1.45; }
-
-/* ---------- samples ---------- */
-.s-banner { padding: 12px 16px; border-radius: 14px; background: #eef2ff; border: 1px solid var(--line); font-size: 0.9rem; color: #334155; margin-bottom: 14px; }
-.s-banner.split { background: #fffbeb; border-color: #fde68a; color: #78350f; }
-.sgrid { display: grid; gap: 12px; }
-.scard {
-    display: flex; gap: 16px; align-items: flex-start; padding: 14px 18px; background: #fff;
-    border: 1px solid var(--line); border-left: 4px solid #6366f1; border-radius: 16px;
-    box-shadow: var(--shadow-1); transition: transform 0.22s ease, box-shadow 0.22s ease;
-}
-.scard.diff { border-left-color: #f59e0b; background: #fffdf7; }
-.scard:hover { transform: translateX(5px); box-shadow: var(--shadow-2); }
-.snum { font-size: 1.4rem; font-weight: 800; color: #a5b4fc; font-variant-numeric: tabular-nums; line-height: 1.2; }
-.scard.diff .snum { color: #fbbf24; }
-.sbody { min-width: 0; flex: 1; }
-.stext { font-size: 1rem; font-weight: 600; word-break: break-word; }
-.skey { margin-top: 4px; font-size: 0.76rem; color: #64748b; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; word-break: break-word; }
-.tag { flex: none; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 10px; border-radius: 99px; }
-.tag.same { background: #e0e7ff; color: #3730a3; }
-.tag.diff { background: #fef3c7; color: #92400e; }
-.s-foot { margin-top: 12px; font-size: 0.78rem; color: var(--muted); }
-
-/* ---------- technical details ---------- */
-.kvgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
-.kv { padding: 12px 16px; border-radius: 14px; background: #f8faff; border: 1px solid var(--line); }
-.kv small { display: block; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: #94a3b8; font-weight: 700; margin-bottom: 3px; }
-.kv b { font-size: 0.95rem; word-break: break-word; }
-.feat-title { margin: 20px 0 10px; font-size: 0.8rem; font-weight: 700; color: #475569; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { padding: 5px 11px; border-radius: 99px; background: #eef2ff; color: #3730a3; font-size: 0.74rem; font-weight: 600; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
-
-/* ---------- expanders ---------- */
-[data-testid="stExpander"] {
-    border: 1px solid var(--line); border-radius: 18px; background: rgba(255, 255, 255, 0.88);
-    box-shadow: var(--shadow-1); margin-bottom: 14px; overflow: hidden; transition: box-shadow 0.25s ease;
-}
-[data-testid="stExpander"]:hover { box-shadow: var(--shadow-2); }
-[data-testid="stExpander"] summary { padding: 0.9rem 1.1rem; font-weight: 700; color: var(--ink); }
-[data-testid="stExpander"] summary p { font-size: 1rem; font-weight: 700; }
-
-/* ---------- sidebar ---------- */
-[data-testid="stSidebar"] { background: linear-gradient(180deg, #ffffff 0%, #f3f6ff 100%); border-right: 1px solid var(--line); }
-[data-testid="stSidebar"] * { color: var(--ink); }
-.side-text { font-size: 0.9rem; line-height: 1.55; color: #475569; margin: 8px 0 16px; }
-.side-kv { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid rgba(99, 102, 241, 0.12); font-size: 0.86rem; }
-.side-kv span { color: #64748b; }
-.side-kv b { text-align: right; }
-.policy { margin: 16px 0; padding: 14px; border-radius: 16px; background: #fff; border: 1px solid var(--line); box-shadow: var(--shadow-1); font-size: 0.85rem; line-height: 1.9; }
-.policy .t { color: var(--trust); font-weight: 800; }
-.policy .v { color: var(--verify); font-weight: 800; }
-.policy small { display: block; font-size: 0.66rem; letter-spacing: 0.14em; color: #94a3b8; font-weight: 700; text-transform: uppercase; line-height: 1.4; margin-bottom: 4px; }
-.side-note { padding: 13px 14px; border-radius: 14px; background: #fffbeb; border: 1px solid #fde68a; color: #78350f !important; font-size: 0.8rem; line-height: 1.5; }
-.hist { margin-top: 22px; }
-.hist-item { display: flex; gap: 10px; align-items: center; padding: 8px 0; font-size: 0.82rem; border-bottom: 1px solid rgba(99, 102, 241, 0.1); }
-.hist-item i { flex: none; width: 8px; height: 8px; border-radius: 50%; }
-.hist-item i.trust { background: #10b981; }
-.hist-item i.verify { background: #f59e0b; }
-.hist-item em { flex: 1; font-style: normal; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hist-item b { flex: none; font-variant-numeric: tabular-nums; }
-
-.foot { text-align: center; color: #94a3b8; font-size: 0.78rem; margin-top: 10px; }
-
-@media (prefers-reduced-motion: reduce) {
-    * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
-}
-.verification-note { margin: 2px 0 16px; padding: 12px 14px; border-radius: 12px; background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; font-size: 0.86rem; line-height: 1.5; }
-.verification-note.verified { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
-.verification-note.failed { background: #fff8e7; border-color: #f4d58d; color: #78350f; }
-.verification-note a { font-weight: 700; }
-.quality-raw { margin: 2px 0 16px; padding: 12px 14px; border-radius: 12px; background: #fff8e7; border: 1px solid #f4d58d; color: #78350f; font-size: 0.88rem; line-height: 1.5; }
-.quality-raw b { display: block; margin-top: 3px; color: #451a03; word-break: break-word; }
-.quality-label { display: inline-flex; margin-bottom: 8px; padding: 5px 9px; border-radius: 99px; background: #fff1c2; color: #92400e; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
-
-/* ---------- V5.4 visual system ---------- */
-:root {
-    --ink: #17233e;
-    --muted: #64748b;
-    --line: #e2e8f2;
-    --indigo: #5145e5;
-    --violet: #7046df;
-    --cyan: #087f9f;
-    --trust: #087f5b;
-    --verify: #a84a0b;
-    --shadow-1: 0 8px 24px rgba(23, 35, 62, 0.06);
-    --shadow-2: 0 16px 38px rgba(40, 47, 91, 0.11);
-}
-
-html, body, .stApp {
-    color: var(--ink);
-    color-scheme: light;
+    color: var(--text);
+    color-scheme: inherit;
     font-family: Inter, "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
 }
 .stApp {
     background:
-        radial-gradient(ellipse at 92% 2%, rgba(103, 232, 249, 0.20), transparent 32rem),
-        radial-gradient(ellipse at 4% 0%, rgba(196, 181, 253, 0.28), transparent 34rem),
-        #f7f8fc;
+        radial-gradient(ellipse at 92% 2%, var(--glow-1), transparent 32rem),
+        radial-gradient(ellipse at 4% 100%, var(--glow-2), transparent 34rem),
+        var(--bg);
 }
-.block-container { max-width: 1160px; padding-top: 1.25rem; padding-bottom: 2.5rem; }
 [data-testid="stHeader"] { background: transparent; }
 #MainMenu, footer { visibility: hidden; }
 [data-testid="InputInstructions"] { display: none; }
-.orbs { display: none; }
+[data-testid="stAppDeployButton"], .stAppDeployButton, .stDeployButton, [data-testid="stDeployButton"] { display: none !important; }
+.block-container { position: relative; z-index: 1; max-width: 1180px; padding: .9rem 1.4rem 2rem; }
+* { scrollbar-color: var(--border) var(--bg); }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: var(--track); }
+*::-webkit-scrollbar-thumb { background: var(--border); border: 2px solid var(--bg); border-radius: 99px; }
+::selection { color: var(--text); background: var(--glow-1); }
 
-.hero {
-    align-items: center; padding: 6px 2px 20px; margin-bottom: 18px;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.24);
-}
-.brand { gap: 14px; }
-.logo {
-    width: 54px; height: 54px; border-radius: 16px; flex: none;
-    background: linear-gradient(145deg, #5145e5, #147ea4);
-    border: 1px solid rgba(255,255,255,.75);
-    box-shadow: 0 8px 20px rgba(81, 69, 229, .20);
-    animation: none;
-}
-.eyebrow { color: #5145e5; font-size: .68rem; letter-spacing: .13em; }
-.title {
-    margin: 3px 0 4px; color: #17233e; font-size: 1.88rem; line-height: 1.12;
-    letter-spacing: -.035em; font-weight: 780;
-    background: none; -webkit-text-fill-color: currentColor;
-}
-.subtitle { color: #64748b; font-size: .96rem; line-height: 1.45; }
-.status-row { gap: 8px; }
-.pill {
-    padding: 7px 11px; color: #334155; background: rgba(255,255,255,.88);
-    border: 1px solid #e2e8f2; border-radius: 11px; box-shadow: none;
-    font-size: .69rem; letter-spacing: .045em; backdrop-filter: none;
-}
-.dot { animation: none; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes dot-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--verify-bg); } 50% { box-shadow: 0 0 0 4px transparent; } }
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+@keyframes think { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+@keyframes rotate { to { transform: rotate(360deg); } }
+@keyframes wordin { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes badgein { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes grow { from { width: 0; } to { width: var(--w); } }
+@keyframes ringfill { from { stroke-dashoffset: var(--circ); } to { stroke-dashoffset: var(--off); } }
+@keyframes pop { from { opacity: 0; transform: scale(.94) translateY(4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 
-.st-key-input_card {
-    padding: 22px 24px 18px; border: 1px solid #e1e7f2; outline: none;
-    border-radius: 20px; background: rgba(255,255,255,.96); backdrop-filter: none;
-    box-shadow: var(--shadow-1); transition: border-color .18s ease, box-shadow .18s ease;
-}
-.st-key-input_card:hover { transform: none; border-color: #c8c9f4; box-shadow: var(--shadow-2); }
-.card-head { color: #17233e; font-size: 1.24rem; font-weight: 740; letter-spacing: -.025em; }
-.card-sub { max-width: 720px; margin: 3px 0 10px; color: #64748b; font-size: .9rem; line-height: 1.5; }
-.mini-label { margin: 7px 0 2px; color: #475569; font-size: .68rem; letter-spacing: .11em; }
-div[data-testid="stTextInput"] input, .stTextInput input {
-    min-height: 3.15rem; padding-inline: 14px; color: #17233e; background: #fff;
-    font-size: 1rem; line-height: 1.5;
-}
-div[data-testid="stTextInput"] [data-baseweb="input"], .stTextInput [data-baseweb="input"] {
-    border: 1px solid #cbd5e1; border-radius: 12px; background: #fff;
-    box-shadow: 0 1px 2px rgba(15,23,42,.035);
-    transition: border-color .16s ease, box-shadow .16s ease;
-}
-div[data-testid="stTextInput"] [data-baseweb="input"]:focus-within,
-.stTextInput [data-baseweb="input"]:focus-within {
-    border-color: #6759ee; box-shadow: 0 0 0 3px rgba(99, 88, 238, .16);
-}
-[data-testid="stButton"] button, .stButton > button,
-[data-testid="stFormSubmitButton"] button, .stFormSubmitButton > button {
-    min-height: 2.75rem; border: 1px solid #d8deea; border-radius: 11px;
-    background: #fff; color: #34415a; box-shadow: 0 1px 2px rgba(15,23,42,.035);
-    font-weight: 640; transition: transform .16s ease, border-color .16s ease,
-        box-shadow .16s ease, background-color .16s ease;
-}
-[data-testid="stButton"] button:hover, .stButton > button:hover,
-[data-testid="stFormSubmitButton"] button:hover, .stFormSubmitButton > button:hover {
-    transform: translateY(-1px); border-color: #aaa4ef; background: #fbfaff;
-    color: #4338ca; box-shadow: 0 5px 14px rgba(67, 56, 202, .09);
-}
-[data-testid="stButton"] button:focus-visible, .stButton > button:focus-visible,
-[data-testid="stFormSubmitButton"] button:focus-visible, .stFormSubmitButton > button:focus-visible {
-    outline: 3px solid rgba(8, 145, 178, .38); outline-offset: 2px;
-}
-[data-testid="stButton"] button p, .stButton > button p { font-size: .82rem; line-height: 1.35; white-space: normal; }
-[data-testid="stFormSubmitButton"] button[kind="primary"],
-.stFormSubmitButton > button[kind="primary"] {
-    min-height: 3rem; border: 0; color: #fff;
-    background: linear-gradient(105deg, #5145e5 0%, #6946dd 62%, #087f9f 150%);
-    box-shadow: 0 7px 16px rgba(81, 69, 229, .20);
-}
-[data-testid="stFormSubmitButton"] button[kind="primary"]:hover,
-.stFormSubmitButton > button[kind="primary"]:hover {
-    border: 0; color: #fff; background: linear-gradient(105deg, #4539d4, #5d3dce 62%, #087f9f 150%);
-    box-shadow: 0 10px 22px rgba(81, 69, 229, .25);
-}
-[data-testid="stFormSubmitButton"] button[kind="primary"] p,
-.stFormSubmitButton > button[kind="primary"] p { color: #fff; font-size: .95rem; font-weight: 720; }
-[data-testid="stButton"] button:disabled, [data-testid="stFormSubmitButton"] button:disabled {
-    cursor: not-allowed; opacity: .58; transform: none; box-shadow: none;
-}
+.hero { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 0 2px 12px; margin-bottom: 10px; border-bottom: 1px solid var(--border); }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.logo { width: 42px; height: 42px; flex: none; display: grid; place-items: center; border-radius: 13px; background: var(--grad); border: 1px solid var(--border); box-shadow: var(--shadow), inset 0 1px 0 var(--hairline); }
+.logo svg { width: 26px; height: 26px; }
+.eyebrow { color: var(--accent); font-size: .66rem; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+.title { margin: 1px 0 2px; color: var(--text); font-size: 1.4rem; line-height: 1.12; letter-spacing: -.03em; font-weight: 800; }
+.subtitle { color: var(--muted); font-size: .84rem; line-height: 1.4; }
+.status-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pill { box-sizing: border-box; display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px; color: var(--text); background: var(--surface-2); font-size: .66rem; line-height: 1; font-weight: 700; letter-spacing: .05em; white-space: nowrap; }
+.dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--trust); }
+.dot.loading { background: var(--verify); animation: dot-pulse 1.5s ease-in-out infinite; }
+.pill .dot.loading { box-sizing: border-box; width: 8px; height: 8px; margin: 0; padding: 0; border: 0; }
+.dot.off { background: var(--error); }
 
-.card { border: 1px solid #e2e8f2; border-radius: 17px; background: #fff; box-shadow: var(--shadow-1); }
-.section-title { margin: 30px 0 3px; color: #1e293b; font-size: 1.18rem; font-weight: 740; letter-spacing: -.02em; }
-.section-sub { color: #64748b; font-size: .89rem; line-height: 1.45; }
-.notice { border-radius: 13px; padding: 13px 15px; box-shadow: none; animation: rise .22s ease both; }
-.notice.info { color: #3345a0; background: #f0f3ff; border-color: #d8defe; }
-.notice.warn { color: #85400b; background: #fff8eb; border-color: #f2d59f; }
-.notice.error { color: #9f2d3c; background: #fff1f2; border-color: #fecdd3; }
-.loading { gap: 16px; padding: 20px 22px; border-color: #dfe4f1; box-shadow: var(--shadow-1); }
-.spin { width: 42px; height: 42px; border-width: 4px; border-top-color: #5145e5; border-right-color: #0891b2; }
-.ltitle { color: #202b45; font-size: 1.04rem; }
-.lsub { margin: 3px 0 8px; color: #64748b; font-size: .86rem; }
-.lbar { height: 3px; background: #ecebff; }
-.lbar::after { background: linear-gradient(90deg, #5145e5, #22b8cf); }
+.st-key-input_card { padding: 14px 16px 12px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow), inset 0 1px 0 var(--hairline); }
+.ask-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.ask-head b { color: var(--text); font-size: 1rem; font-weight: 750; letter-spacing: -.02em; }
+.ask-head span { color: var(--muted); font-size: .81rem; }
+.card-head { color: var(--text); font-size: 1.05rem; font-weight: 750; }
+.card-sub { color: var(--muted); font-size: .88rem; }
+.mini-label { margin: 8px 0 4px; color: var(--muted); font-size: .66rem; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
+div[data-testid="stTextInput"] input, .stTextInput input { box-sizing: border-box; min-height: 3rem; padding-inline: 14px; color: var(--text) !important; caret-color: var(--accent); background: var(--surface-2) !important; border-radius: 12px; font-size: .98rem; line-height: 1.4; }
+div[data-testid="stTextInput"] input::placeholder, .stTextInput input::placeholder { color: var(--muted) !important; opacity: 1; }
+div[data-testid="stTextInput"] [data-baseweb="input"], .stTextInput [data-baseweb="input"] { min-height: 3rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); box-shadow: none; transition: border-color .16s ease, box-shadow .16s ease; }
+div[data-testid="stTextInput"] [data-baseweb="input"]:focus-within, .stTextInput [data-baseweb="input"]:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--glow-1); }
+.st-key-input_card [data-testid="stForm"] { border: 0; padding: 0; }
 
-.steps { gap: 14px; margin-top: 22px; }
-.step { padding: 19px; border-radius: 16px; box-shadow: 0 3px 12px rgba(23,35,62,.035); }
-.step:hover { transform: translateY(-2px); box-shadow: var(--shadow-1); }
-.step-num { width: 31px; height: 31px; margin-bottom: 10px; border-radius: 10px; background: #eeedff; color: #5145e5; box-shadow: none; }
-.step-title { color: #202b45; font-weight: 720; }
-.step-text { color: #64748b; font-size: .86rem; }
+[data-testid="stButton"] button, .stButton > button, [data-testid="stFormSubmitButton"] button, .stFormSubmitButton > button { box-sizing: border-box; min-height: 2.75rem; border: 1px solid var(--border); border-radius: 11px; color: var(--text); background: var(--surface-2); box-shadow: none; font-weight: 650; transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease, background-color .16s ease; }
+[data-testid="stButton"] button:hover, .stButton > button:hover, [data-testid="stFormSubmitButton"] button:hover, .stFormSubmitButton > button:hover { transform: translateY(-1px); border-color: var(--accent); background: var(--surface-2); color: var(--text); box-shadow: 0 5px 16px var(--glow-1); }
+[data-testid="stButton"] button:focus-visible, .stButton > button:focus-visible, [data-testid="stFormSubmitButton"] button:focus-visible, .stFormSubmitButton > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[data-testid="stButton"] button p, .stButton > button p, [data-testid="stFormSubmitButton"] button p, .stFormSubmitButton > button p { color: inherit; font-size: .82rem; line-height: 1.3; font-weight: inherit; white-space: normal; }
+[data-testid="stFormSubmitButton"] button, .stFormSubmitButton > button { width: 100%; min-height: 3rem; }
+[data-testid="stFormSubmitButton"] button[kind="primary"], .stFormSubmitButton > button[kind="primary"], [data-testid="stFormSubmitButton"] button[data-testid="stBaseButton-primary"] { border: 0; color: var(--on-accent); background: var(--grad); font-weight: 800; box-shadow: 0 7px 22px var(--glow-1); }
+[data-testid="stFormSubmitButton"] button[kind="primary"] p, .stFormSubmitButton > button[kind="primary"] p { color: var(--on-accent); font-size: .92rem; font-weight: 800; }
+[data-testid="stFormSubmitButton"] button[kind="primary"]:hover, .stFormSubmitButton > button[kind="primary"]:hover { transform: translateY(-1px); color: var(--on-accent); box-shadow: 0 10px 26px var(--glow-1); }
+[data-testid="stButton"] button:disabled, [data-testid="stFormSubmitButton"] button:disabled { cursor: not-allowed; opacity: .58; transform: none; box-shadow: none; }
+.st-key-input_card .stButton > button { min-height: 2rem; padding: .2rem .55rem; border-radius: 999px; }
+.st-key-input_card .stButton > button p { font-size: .72rem; }
+.st-key-clear_button button { color: var(--muted); background: transparent; border-style: dashed; }
 
-.rc-wrap { margin: 18px 0 0; padding: 1px; border-radius: 21px; box-shadow: var(--shadow-1); transition: box-shadow .18s ease; }
-.rc-wrap:hover { transform: none; box-shadow: var(--shadow-2); }
-.rc-wrap.trust { background: linear-gradient(125deg, #b9e6d6, #d5dcff 58%, #b8e9f0); }
-.rc-wrap.verify { background: linear-gradient(125deg, #f1d4a5, #f3e5cd 58%, #f5d8c4); }
-.rc { grid-template-columns: minmax(0, 1.35fr) minmax(245px, .75fr); gap: 26px; padding: 27px; border-radius: 20px; background: rgba(255,255,255,.98); }
-.answer { margin: 7px 0 17px; color: #18243d; font-size: 1.72rem; line-height: 1.28; font-weight: 740; letter-spacing: -.025em; }
-.badge-row { gap: 10px; margin-bottom: 12px; }
-.badge { padding: 7px 12px; border-radius: 9px; font-size: .82rem; letter-spacing: .075em; }
-.badge.trust { color: #087452; background: #e9f8f1; border-color: #b9e7d3; }
-.badge.verify { color: #9a4308; background: #fff3df; border-color: #f0d19c; }
-.thr-chip { padding: 7px 10px; border-radius: 9px; color: #475569; background: #f6f7fb; border-color: #e2e8f2; font-size: .78rem; }
-.decision-msg { margin-bottom: 12px; color: #334155; font-size: .91rem; line-height: 1.55; }
-.qecho { margin-bottom: 14px; font-size: .85rem; }
-.disclaimer { border-color: #e2e8f2; font-size: .76rem; }
-.gauge-col { padding: 15px; border: 1px solid #e8ebf4; border-radius: 15px; background: #fafbfe; }
-.gauge-col .eyebrow { color: #68758d; font-size: .65rem; }
-.gauge { max-width: 240px; }
-.meter { height: 7px; }
-.meter-cap { margin-top: 18px; color: #475569; font-size: .84rem; line-height: 1.45; }
-.verification-note { border-radius: 12px; font-size: .83rem; line-height: 1.5; }
+.card { border: 1px solid var(--border); border-radius: 17px; background: var(--surface); box-shadow: var(--shadow), inset 0 1px 0 var(--hairline); }
+.section-title { margin: 26px 0 3px; color: var(--text); font-size: 1.12rem; font-weight: 750; }
+.section-sub { color: var(--muted); font-size: .88rem; line-height: 1.45; margin-bottom: 14px; }
+.notice { display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 13px; color: var(--text); background: var(--surface); animation: rise .22s ease both; }
+.notice b { display: block; margin-bottom: 2px; }
+.notice span { font-size: .9rem; line-height: 1.45; }
+.notice.info { border-color: var(--info-bd); color: var(--text); background: var(--info-bg); }
+.notice.warn { border-color: var(--verify-bd); color: var(--text); background: var(--verify-bg); }
+.notice.error { border-color: var(--error-bd); color: var(--text); background: var(--error-bg); }
+
+/* Answer card and final decision */
+.rc-wrap { margin: 14px 0 30px; padding: 1px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow), inset 0 1px 0 var(--hairline); animation: rise .3s ease both; }
+.rc-wrap.trust { border-color: var(--trust-bd); }
+.rc-wrap.verify { border-color: var(--verify-bd); }
+.rc { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(230px, .75fr); gap: 22px; padding: 22px; border-radius: 17px; background: var(--surface); }
+.answer { margin: 6px 0 16px; color: var(--text); font-size: 1.85rem; line-height: 1.25; font-weight: 760; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.answer-word { display: inline-block; }
+.badge-row { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 12px 0; }
+.badge { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 999px; font-size: .86rem; font-weight: 800; letter-spacing: .06em; cursor: default; user-select: none; box-shadow: none; }
+.badge.trust { color: var(--trust); background: var(--trust-bg); border-color: var(--trust-bd); }
+.badge.verify { color: var(--verify); background: var(--verify-bg); border-color: var(--verify-bd); }
+.badge svg { width: 20px; height: 20px; flex: none; }
+.verify-link { display: inline-flex; align-items: center; min-height: 34px; padding: 6px 11px; border: 1px solid var(--info-bd); border-radius: 999px; color: var(--accent); background: var(--info-bg); font-size: .78rem; font-weight: 700; text-decoration: none; }
+.verify-link:hover { border-color: var(--accent); color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.thr-chip { padding: 7px 10px; border: 1px solid var(--border); border-radius: 10px; color: var(--muted); background: var(--surface-2); font-size: .78rem; font-weight: 650; }
+.decision-msg { margin: 10px 0 12px; color: var(--text); font-size: .92rem; line-height: 1.55; }
+.meta-line { margin: 0 0 10px; color: var(--muted); font-size: .76rem; }
+.qecho { margin: 0 0 12px; color: var(--muted); font-size: .84rem; overflow-wrap: anywhere; }
+.qecho b { color: var(--text); }
+.disclaimer { padding-top: 10px; border-top: 1px dashed var(--border); color: var(--muted); font-size: .76rem; line-height: 1.5; }
+.gauge-col { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface-2); }
+.gauge-col .eyebrow { margin-bottom: 6px; color: var(--muted); }
+.gauge { display: block; width: 100%; max-width: 250px; filter: drop-shadow(0 10px 18px var(--border)); }
+.ring-prog { stroke-dashoffset: var(--off); }
+.meter { position: relative; width: 100%; max-width: 320px; height: 9px; margin: 18px 0 0; border-radius: 99px; background: var(--track); }
+.meter-fill { height: 100%; width: var(--w); border-radius: 99px; }
+.meter-fill.trust { background: linear-gradient(90deg, var(--trust), var(--accent-2)); }
+.meter-fill.verify { background: linear-gradient(90deg, var(--verify), var(--error)); }
+.meter-mark { position: absolute; top: -6px; width: 2px; height: 22px; border-radius: 3px; background: var(--text); transform: translateX(-1px); }
+.meter-mark span { position: absolute; top: 27px; left: 50%; transform: translateX(-50%); color: var(--muted); font-size: .68rem; font-weight: 700; white-space: nowrap; }
+.meter-cap { width: 100%; min-height: 2.8em; margin-top: 42px; padding: 0 8px; color: var(--text); font-size: .82rem; font-weight: 700; line-height: 1.5; text-align: center; overflow-wrap: anywhere; }
+.meter-cap:empty { display: none; }
+.meter-cap em { color: var(--text); font-style: normal; }
+.meter-cap .trust { color: var(--trust); }
+.meter-cap .verify { color: var(--verify); }
+.verification-note { margin: 2px 0 12px; padding: 11px 13px; border: 1px solid var(--info-bd); border-radius: 12px; color: var(--text); background: var(--info-bg); font-size: .84rem; line-height: 1.5; }
 .verification-note b { display: block; margin-bottom: 3px; }
-.verification-note a { color: #4338ca; text-underline-offset: 2px; }
-.quality-raw { border-radius: 12px; font-size: .83rem; }
+.verification-note.verified { border-color: var(--trust-bd); background: var(--trust-bg); }
+.verification-note.failed { border-color: var(--verify-bd); background: var(--verify-bg); }
+.verification-note a { color: var(--accent); font-weight: 700; text-underline-offset: 2px; }
+.quality-raw { margin: 2px 0 12px; padding: 11px 13px; border: 1px solid var(--error-bd); border-radius: 12px; color: var(--text); background: var(--error-bg); font-size: .84rem; line-height: 1.5; }
+.quality-raw b { display: block; margin-top: 3px; overflow-wrap: anywhere; }
+.quality-label { display: inline-flex; margin-bottom: 7px; padding: 4px 8px; border-radius: 99px; color: var(--error); background: var(--error-bg); font-size: .66rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.hint-note { margin: 2px 0 12px; padding: 10px 13px; border: 1px solid var(--info-bd); border-radius: 12px; color: var(--text); background: var(--info-bg); font-size: .82rem; line-height: 1.5; }
+.hint-note b { display: block; margin-bottom: 2px; }
+.fresh .answer-word { animation: wordin .35s ease both; animation-delay: calc(var(--i) * 45ms); }
+.fresh .badge-row { animation: badgein .35s ease both; animation-delay: var(--answer-delay, 0ms); }
+.fresh .ring-prog.fresh-ring { animation: ringfill 1.5s cubic-bezier(.2,.8,.2,1) both; }
 
-.grid5 { gap: 13px; }
-.mcard { border: 1px solid #e2e8f2; border-radius: 15px; box-shadow: 0 3px 12px rgba(23,35,62,.035); }
-.mcard:hover { transform: translateY(-2px); box-shadow: var(--shadow-1); }
-.mlabel { color: #64748b; font-size: .68rem; letter-spacing: .08em; }
-.mvalue { color: #202b45; font-size: 1.78rem; }
-.mnote { color: #64748b; font-size: .77rem; }
-.s-banner { border-radius: 12px; }
-.scard { border-radius: 12px; }
-.scard:hover { transform: translateY(-1px); box-shadow: var(--shadow-1); }
-.kv { border-radius: 12px; background: #fafbfe; border-color: #e5e9f2; }
-.kv small { color: #64748b; }
-[data-testid="stExpander"] { border: 1px solid #e2e8f2; border-radius: 13px; background: rgba(255,255,255,.82); }
-[data-testid="stExpander"]:hover { box-shadow: var(--shadow-1); }
-[data-testid="stExpander"] summary { color: #334155; }
-[data-testid="stSidebar"] { background: rgba(255,255,255,.92); border-right: 1px solid #e2e8f2; }
-.policy { border-radius: 13px; box-shadow: none; }
-.side-note { border-radius: 12px; }
-.foot { margin-top: 24px; color: #748197; font-size: .74rem; }
+/* Reliability signals, samples and technical details */
+.grid5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.mcard { --metric-accent: var(--accent); position: relative; overflow: hidden; padding: 15px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface); box-shadow: var(--shadow), inset 0 1px 0 var(--hairline); }
+.mcard::before { position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg, var(--metric-accent), transparent); content: ""; }
+.mlabel { min-height: 2em; color: var(--muted); font-size: .68rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.mvalue { margin: 5px 0 7px; color: var(--text); font-size: 1.7rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.mbar { height: 6px; margin-bottom: 9px; overflow: hidden; border-radius: 99px; background: var(--surface-2); }
+.mbar i { display: block; height: 100%; width: var(--w); border-radius: inherit; background: linear-gradient(90deg, var(--metric-accent), var(--accent-2)); }
+.msub { margin-bottom: 5px; color: var(--text); font-size: .78rem; font-weight: 650; }
+.mnote { color: var(--muted); font-size: .76rem; line-height: 1.45; }
+.s-banner { margin-bottom: 12px; padding: 11px 14px; border: 1px solid var(--info-bd); border-radius: 12px; color: var(--text); background: var(--info-bg); font-size: .88rem; }
+.s-banner.split { border-color: var(--verify-bd); background: var(--verify-bg); }
+.sgrid { display: grid; gap: 10px; }
+.scard { display: flex; align-items: flex-start; gap: 12px; min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 12px; background: var(--surface); }
+.scard.diff { border-left-color: var(--verify); }
+.snum { color: var(--accent); font-size: 1.15rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.scard.diff .snum { color: var(--verify); }
+.sbody { flex: 1; min-width: 0; }
+.stext { color: var(--text); font-size: .95rem; font-weight: 600; overflow-wrap: anywhere; }
+.skey { margin-top: 4px; color: var(--muted); font: .74rem ui-monospace, "Cascadia Mono", Consolas, monospace; overflow-wrap: anywhere; }
+.tag { flex: none; padding: 4px 8px; border-radius: 99px; font-size: .65rem; font-weight: 700; text-transform: uppercase; }
+.tag.same { color: var(--trust); background: var(--trust-bg); }
+.tag.diff { color: var(--verify); background: var(--verify-bg); }
+.s-foot { margin-top: 10px; color: var(--muted); font-size: .76rem; }
+.kvgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.kv { padding: 11px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.kv small { display: block; margin-bottom: 3px; color: var(--muted); font-size: .65rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.kv b { color: var(--text); font-size: .91rem; overflow-wrap: anywhere; }
+.feat-title { margin: 18px 0 8px; color: var(--muted); font-size: .78rem; font-weight: 700; }
+.chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip { padding: 5px 9px; border: 1px solid var(--border); border-radius: 99px; color: var(--muted); background: var(--surface-2); font: .72rem ui-monospace, "Cascadia Mono", Consolas, monospace; }
+
+/* Native Streamlit surfaces */
+[data-testid="stExpander"] { overflow: hidden; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow), inset 0 1px 0 var(--hairline); }
+[data-testid="stExpander"] summary { padding: .8rem 1rem; color: var(--text); font-weight: 700; }
+[data-testid="stExpander"] summary p { color: var(--text); font-size: .94rem; font-weight: 700; }
+[data-testid="stExpanderDetails"], [data-testid="stExpander"] details { color: var(--text); background: var(--surface); }
+[data-testid="stExpander"] summary svg { color: var(--muted); fill: currentColor; }
+[data-testid="stCode"], [data-testid="stCode"] pre, code, pre { color: var(--text); background: var(--code-bg); }
+[data-testid="stMarkdownContainer"], .stMarkdown { color: var(--text); }
+a { color: var(--accent); }
+[data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"] { color: var(--text); background: var(--surface); border-color: var(--border); }
+[data-baseweb="popover"] *, [data-baseweb="menu"] *, [role="listbox"] * { color: inherit; }
+[role="option"]:hover, [role="option"][aria-selected="true"] { background: var(--surface-2); }
+.st-key-theme_choice [data-testid="stSegmentedControl"] { justify-content: flex-end; }
+.st-key-theme_choice [data-testid="stSegmentedControl"] button, .st-key-theme_choice [data-testid="stSegmentedControl"] label { color: var(--muted); background: var(--surface-2); border-color: var(--border); }
+.st-key-theme_choice [data-testid="stSegmentedControl"] [aria-pressed="true"], .st-key-theme_choice [data-testid="stSegmentedControl"] [aria-checked="true"] { color: var(--on-accent); background: var(--grad); }
+.st-key-theme_choice [data-testid="stRadio"] label { color: var(--text); }
+[data-testid="stSidebar"] { border-right: 1px solid var(--border); background: var(--surface); }
+[data-testid="stSidebar"] [data-testid="stSidebarContent"] { background: var(--surface); }
+[data-testid="stSidebar"] * { color: inherit; }
+.side-text { margin: 8px 0 14px; color: var(--muted); font-size: .88rem; line-height: 1.5; }
+.side-kv { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); color: var(--text); font-size: .84rem; }
+.side-kv span, .policy small { color: var(--muted); }
+.side-kv b { text-align: right; }
+.policy { margin: 14px 0; padding: 12px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface-2); font-size: .83rem; line-height: 1.8; }
+.policy .t { color: var(--trust); font-weight: 800; }
+.policy .v { color: var(--verify); font-weight: 800; }
+.policy small { display: block; margin-bottom: 4px; font-size: .64rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.side-note { padding: 11px 12px; border: 1px solid var(--verify-bd); border-radius: 12px; color: var(--text) !important; background: var(--verify-bg); font-size: .79rem; line-height: 1.5; }
+.hist { margin-top: 18px; }
+.hist-item { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--border); color: var(--text); font-size: .8rem; }
+.hist-item i { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.hist-item i.trust { background: var(--trust); }
+.hist-item i.verify { background: var(--verify); }
+.hist-item em { flex: 1; min-width: 0; overflow: hidden; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.hist-item b { flex: none; font-variant-numeric: tabular-nums; }
+.foot { margin-top: 20px; color: var(--muted); font-size: .74rem; text-align: center; }
+
+/* Live answer preparation card */
+.loading { position: relative; display: block; overflow: hidden; margin-top: 12px; padding: 13px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow), inset 0 1px 0 var(--hairline); }
+.answer-skeleton { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(200px, .75fr); align-items: center; gap: 22px; padding: 18px 20px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface); box-shadow: inset 0 1px 0 var(--hairline); }
+.skeleton-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.skeleton-heading .eyebrow { color: var(--accent); }
+.preparing-tag { padding: 4px 8px; border: 1px solid var(--info-bd); border-radius: 99px; color: var(--accent); background: var(--info-bg); font-size: .62rem; font-weight: 800; letter-spacing: .08em; }
+.skeleton-lines { display: grid; gap: 10px; }
+.skeleton-line { height: 13px; border-radius: 99px; background: linear-gradient(100deg, var(--surface-2) 20%, var(--border) 45%, var(--surface-2) 70%); background-size: 220% 100%; animation: shimmer 1.8s ease-in-out infinite; }
+.skeleton-line:nth-child(1) { width: 92%; }
+.skeleton-line:nth-child(2) { width: 76%; }
+.skeleton-line:nth-child(3) { width: 54%; }
+.thinking { display: inline-flex; align-items: center; gap: 5px; margin-top: 17px; color: var(--muted); font-size: .77rem; }
+.thinking i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: think 1.2s ease-in-out infinite; }
+.thinking i:nth-child(2) { animation-delay: .15s; }
+.thinking i:nth-child(3) { animation-delay: .3s; }
+.skeleton-gauge { position: relative; display: grid; place-items: center; width: min(100%, 200px); aspect-ratio: 1; justify-self: center; border: 1px solid var(--border); border-radius: 50%; background: var(--surface-2); }
+.skeleton-gauge::before { position: absolute; inset: 14px; border: 4px solid var(--border); border-top-color: var(--accent); border-right-color: var(--accent-2); border-radius: 50%; animation: rotate 4s linear infinite; content: ""; }
+.skeleton-gauge span { position: relative; color: var(--muted); font-size: .68rem; font-weight: 800; letter-spacing: .15em; }
+.lmain { padding: 13px 8px 2px; }
+.lhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ltitle { color: var(--text); font-size: .98rem; font-weight: 750; }
+.lclock { flex: none; padding: 3px 9px; border: 1px solid var(--border); border-radius: 99px; color: var(--muted); background: var(--surface-2); font-size: .72rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.lsub { margin: 3px 0 8px; color: var(--muted); font-size: .82rem; }
+.pipe { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.pipe li { display: flex; align-items: center; gap: 9px; min-width: 0; color: var(--muted); font-size: .82rem; }
+.pipe li > span:nth-child(2) { flex: 1; min-width: 0; }
+.pipe li small { margin-left: 6px; color: var(--muted); font-size: .7rem; font-weight: 600; }
+.pipe .pd { box-sizing: border-box; display: grid; flex: none; place-items: center; width: 19px; height: 19px; border: 2px solid var(--border); border-radius: 50%; color: var(--on-accent); font-size: .62rem; font-weight: 800; }
+.pipe li.done { color: var(--text); }
+.pipe li.done .pd { border-color: var(--trust); color: var(--on-accent); background: var(--trust); }
+.pipe li.active { color: var(--text); font-weight: 700; }
+.pipe li.active small { color: var(--accent); }
+.pipe li.active .pd { border-color: var(--accent); background: var(--glow-1); }
+.pips { display: inline-flex; flex: none; gap: 4px; }
+.pip { display: block; width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.pip.done { background: var(--trust); }
+.pip.active { background: var(--accent); box-shadow: 0 0 0 3px var(--glow-1); }
+.candidate-label, .pv-label { margin-top: 11px; color: var(--muted); font-size: .62rem; font-weight: 750; letter-spacing: .11em; text-transform: uppercase; }
+.candidates { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.candidate { max-width: 100%; padding: 5px 9px; overflow: hidden; border: 1px solid var(--border); border-radius: 999px; color: var(--text); background: var(--surface-2); font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+.candidate.new { animation: pop .25s ease both; }
+.pvs { display: grid; gap: 5px; margin-top: 5px; }
+.pv { display: flex; gap: 9px; min-width: 0; padding: 6px 9px; border: 1px solid var(--border); border-radius: 9px; color: var(--text); background: var(--surface-2); font-size: .78rem; }
+.pv.new { animation: pop .25s ease both; }
+.pv b { flex: none; color: var(--accent); font-variant-numeric: tabular-nums; }
+.pv span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lbar { height: 3px; margin: 10px -13px -13px; background: var(--surface-2); }
+.lbar::after { display: block; width: 38%; height: 100%; border-radius: 99px; background: var(--grad); animation: shimmer 1.4s linear infinite; content: ""; }
+
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 13px; margin-top: 22px; }
+.step { padding: 17px; border-radius: 15px; }
+.step-num { display: grid; place-items: center; width: 30px; height: 30px; margin-bottom: 9px; border-radius: 10px; color: var(--on-accent); background: var(--grad); font-weight: 800; }
+.step-title { color: var(--text); margin-bottom: 3px; font-weight: 750; }
+.step-text { color: var(--muted); font-size: .85rem; line-height: 1.5; }
 
 @media (max-width: 860px) {
-    .rc { grid-template-columns: minmax(0, 1fr); }
-    .gauge-col { border-top: 1px solid #e8ebf4; }
+    .rc, .answer-skeleton { grid-template-columns: minmax(0, 1fr); }
+    .gauge-col { border-top: 1px solid var(--border); }
+    .skeleton-gauge { width: min(100%, 180px); }
 }
 @media (max-width: 640px) {
-    .block-container { padding: .8rem .85rem 1.7rem; }
-    .hero { align-items: flex-start; gap: 12px; padding-bottom: 15px; }
-    .brand { align-items: flex-start; gap: 11px; }
-    .logo { width: 44px; height: 44px; border-radius: 13px; }
-    .logo svg { width: 28px; height: 28px; }
-    .title { font-size: 1.42rem; }
-    .subtitle { font-size: .84rem; }
+    .block-container { padding: .7rem .8rem 1.5rem; }
+    .hero { align-items: flex-start; gap: 9px; padding-bottom: 10px; }
+    .brand { align-items: flex-start; gap: 9px; }
+    .logo { width: 38px; height: 38px; border-radius: 11px; }
+    .logo svg { width: 24px; height: 24px; }
+    .title { font-size: 1.18rem; }
+    .subtitle { font-size: .77rem; }
     .status-row { width: 100%; gap: 6px; }
-    .pill { padding: 6px 8px; font-size: .62rem; }
-    .st-key-input_card { padding: 16px 14px 13px; border-radius: 16px; }
-    .card-head { font-size: 1.12rem; }
-    .card-sub { font-size: .84rem; }
-    div[data-testid="stTextInput"] input, .stTextInput input { min-height: 2.9rem; font-size: .94rem; }
-    [data-testid="stButton"] button p, .stButton > button p { font-size: .75rem; }
-    .rc { gap: 16px; padding: 18px 15px; }
-    .answer { font-size: 1.42rem; }
-    .gauge-col { padding: 10px; }
-    .steps { grid-template-columns: minmax(0,1fr); gap: 10px; }
-    .step { padding: 15px; }
-    .section-title { margin-top: 23px; }
-    .grid5 { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 9px; }
+    .pill { min-height: 30px; padding: 5px 8px; font-size: .6rem; }
+    .st-key-input_card { padding: 12px 12px 10px; border-radius: 15px; }
+    .ask-head { gap: 4px 8px; }
+    .ask-head span { font-size: .75rem; }
+    div[data-testid="stTextInput"] input, .stTextInput input, div[data-testid="stTextInput"] [data-baseweb="input"], .stTextInput [data-baseweb="input"] { min-height: 2.8rem; }
+    [data-testid="stButton"] button p, .stButton > button p { font-size: .7rem; }
+    .st-key-example_chips [data-testid="stHorizontalBlock"] { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+    .st-key-example_chips [data-testid="column"] { width: auto !important; min-width: 0 !important; flex: initial !important; }
+    .st-key-example_chips button { width: 100%; }
+    .rc { gap: 14px; padding: 15px 13px; }
+    .answer { font-size: 1.48rem; }
+    .gauge-col { padding: 12px; }
+    .meter-cap { margin-top: 42px; }
+    .answer-skeleton { gap: 14px; padding: 14px 12px; }
+    .skeleton-gauge { width: min(100%, 150px); }
+    .lmain { padding: 11px 3px 1px; }
+    .pipe li { font-size: .75rem; }
+    .pipe li small { font-size: .66rem; }
+    .steps { grid-template-columns: minmax(0,1fr); gap: 9px; }
+    .step { padding: 14px; }
+    .grid5 { grid-template-columns: repeat(auto-fit, minmax(138px, 1fr)); gap: 8px; }
+    .section-title { margin-top: 22px; }
 }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
@@ -661,6 +507,30 @@ def pct_plain(value: float) -> str:
 
 def token_probability(log_prob: float) -> float:
     return math.exp(min(log_prob, 0.0))
+
+
+def is_open_ended(question: str) -> bool:
+    """Heuristic UI hint only. It never changes a decision; it just explains N/A."""
+    pattern = (
+        r"\b(explain|describe|discuss|summari[sz]e|write|essay|story|poem|compare|"
+        r"overview|tell me about|pros and cons)\b|\bin\s+\d+\s+words\b|\bhow\s+(?:does|do)\b"
+    )
+    return bool(re.search(pattern, str(question or ""), re.IGNORECASE))
+
+
+def stage_step(stage: str) -> int:
+    """Map a pipeline stage title to the index of the visible progress step."""
+    for prefix, index in (
+        ("Loading", 0),
+        ("Sampling", 1),
+        ("Extracting", 2),
+        ("Classifying", 2),
+        ("Running", 3),
+        ("Finalizing", 4),
+    ):
+        if stage.startswith(prefix):
+            return index
+    return 1
 
 
 # ============================================================
@@ -900,19 +770,39 @@ def run_check(gate: ReliabilityGate, question: str) -> dict:
     return build_view(result, latency, runtime_label(gate))
 
 
-def run_with_stage_hooks(gate: ReliabilityGate, question: str, on_stage) -> dict:
-    """Report actual gate call boundaries while keeping instrumentation in the UI layer."""
+def run_with_stage_hooks(gate: ReliabilityGate, question: str, on_stage, on_progress=None) -> dict:
+    """Report actual gate call boundaries while keeping instrumentation in the UI layer.
+
+    on_stage(title) fires at each pipeline stage. on_progress(done, total, answer_text) fires
+    after every individual sample so the interface can show answers as they arrive. Each
+    callback is also a Streamlit call, which is what lets a Clear/new question interrupt a run
+    at the next sample boundary instead of after all five samples.
+    """
     from src.gate import reliability_gate as gate_module
 
     model = gate.model
     original_sample = gate_module.sample_answers
     original_verify = gate_module.verify_answer
+    original_generate = getattr(gate_module, "generate_one", None)
     original_predict_proba = model.predict_proba
     original_build_features = gate._build_features
     original_consensus = gate._select_consensus
+    counter = {"done": 0}
+
     def tracked_sampling(*args, **kwargs):
+        counter["done"] = 0
         on_stage(f"Sampling {N_SAMPLES} answers")
         return original_sample(*args, **kwargs)
+
+    def tracked_generate(*args, **kwargs):
+        sample = original_generate(*args, **kwargs)
+        counter["done"] += 1
+        if on_progress is not None:
+            try:
+                on_progress(counter["done"], N_SAMPLES, str(getattr(sample, "answer", "")))
+            except Exception:  # a display problem must never break inference
+                logger.exception("Progress callback failed")
+        return sample
 
     def tracked_features(*args, **kwargs):
         on_stage("Extracting reliability features")
@@ -946,6 +836,8 @@ def run_with_stage_hooks(gate: ReliabilityGate, question: str, on_stage) -> dict
     try:
         install_patch(gate_module, "sample_answers", tracked_sampling)
         install_patch(gate_module, "verify_answer", tracked_verification)
+        if original_generate is not None:
+            install_patch(gate_module, "generate_one", tracked_generate)
         install_patch(model, "predict_proba", tracked_classification)
         install_patch(gate, "_build_features", tracked_features)
         install_patch(gate, "_select_consensus", tracked_consensus)
@@ -958,13 +850,28 @@ def run_with_stage_hooks(gate: ReliabilityGate, question: str, on_stage) -> dict
                 delattr(target, name)
 
 
-def load_and_run(gate_was_loaded: bool, question: str, on_stage):
+def load_and_run(gate_was_loaded: bool, question: str, on_stage, on_progress=None):
     if not gate_was_loaded:
         on_stage(f"Loading local model: {MODEL_NAME.split('/')[-1]}")
     gate, error = ensure_gate()
     if gate is None:
         return None, error, None
-    return gate, None, run_with_stage_hooks(gate, question, on_stage)
+    return gate, None, run_with_stage_hooks(gate, question, on_stage, on_progress)
+
+
+def acquire_run_lock(state: dict, on_wait, timeout: float = 240.0) -> bool:
+    """Wait (instead of failing) while another session's check finishes."""
+    started = perf_counter()
+    last_paint = -1.0
+    while True:
+        if state["lock"].acquire(timeout=0.3):
+            return True
+        waited = perf_counter() - started
+        if waited >= timeout:
+            return False
+        if last_paint < 0 or waited - last_paint >= 1.0:
+            last_paint = waited
+            on_wait(waited)
 
 
 # ============================================================
@@ -991,12 +898,12 @@ def hero_html(status: str, runtime: str | None = None) -> str:
                 <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <defs>
                         <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0" stop-color="#4f46e5"/>
-                            <stop offset="1" stop-color="#06b6d4"/>
+                            <stop offset="0" stop-color="var(--accent)"/>
+                            <stop offset="1" stop-color="var(--accent-2)"/>
                         </linearGradient>
                     </defs>
                     <path d="M12 2.5l8 3v6.2c0 4.6-3.2 8.3-8 9.8-4.8-1.5-8-5.2-8-9.8V5.5l8-3z" fill="url(#lg)"/>
-                    <path d="M8.2 12.2l2.6 2.6 5-5.4" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M8.2 12.2l2.6 2.6 5-5.4" stroke="var(--on-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
             </div>
             <div>
@@ -1036,14 +943,109 @@ def calibration_banner_html(loaded: bool, calibrated: bool, note: str) -> str:
     return ""
 
 
-def loading_html(title: str, detail: str) -> str:
-    """Render one real pipeline stage with an honest ongoing activity indicator."""
+def loading_html(
+    title: str,
+    detail: str,
+    active: int | None = None,
+    samples_done: int = 0,
+    samples_total: int = 0,
+    previews: list | tuple = (),
+    elapsed: float = 0.0,
+    model_ready: bool = False,
+) -> str:
+    """Show a result-shaped preparation card and the live inference pipeline."""
+    steps = (
+        ("Load model", "waking up the local Qwen model"),
+        ("Sample answers", "writing independent answers"),
+        ("Measure agreement", "comparing answers and token confidence"),
+        ("Verify independently", "checking math and capital cities"),
+        ("Decide", "applying the calibrated threshold"),
+    )
+    tips = (
+        "The gate asks for several answers so it can measure how much the model disagrees with itself.",
+        "Agreement between samples is a signal, not proof that an answer is true.",
+        "Only percentage math and capital cities are independently verified today.",
+        "VERIFY does not mean wrong. It means the gate is not confident enough to recommend trust.",
+    )
+
+    pipe_html = ""
+    if active is not None:
+        rows = []
+        for index, (label, hint) in enumerate(steps):
+            if index < active or (index == 0 and model_ready):
+                state, mark = "done", "&#10003;"
+            elif index == active:
+                state, mark = "active", ""
+            else:
+                state, mark = "todo", ""
+            extra = ""
+            if index == 1 and samples_total:
+                pip_classes = []
+                for n in range(samples_total):
+                    if state == "done" or n < samples_done:
+                        pip_classes.append("pip done")
+                    elif n == samples_done and state == "active":
+                        pip_classes.append("pip active")
+                    else:
+                        pip_classes.append("pip")
+                extra = '<span class="pips">' + "".join(f'<i class="{cls}"></i>' for cls in pip_classes) + "</span>"
+                if state != "todo":
+                    hint = f"{min(samples_done, samples_total)} of {samples_total} answers written"
+            rows.append(
+                f'<li class="{state}"><span class="pd" aria-hidden="true">{mark}</span>'
+                f"<span>{esc(label)}<small>{esc(hint)}</small></span>{extra}</li>"
+            )
+        pipe_html = f'<ol class="pipe">{"".join(rows)}</ol>'
+
+    def safe_loading_text(value: object) -> str:
+        return esc(str(value).replace("%", " percent"))
+
+    loading_detail = str(detail)
+    if "Still working" not in loading_detail:
+        loading_detail = f"Still working · {loading_detail}"
+
+    preview_html = ""
+    shown = list(previews)[-5:]
+    if shown:
+        offset = len(previews) - len(shown)
+        items = []
+        for position, text in enumerate(shown, start=offset + 1):
+            clean = " ".join(str(text).split())[:110] or "(empty answer)"
+            clean = clean.replace("%", " percent")
+            newest = " new" if position == len(previews) else ""
+            items.append(f'<div class="pv{newest}"><b>{position:02d}</b><span>{esc(clean)}</span></div>')
+        preview_html = '<div class="pv-label">Answers so far</div><div class="pvs">' + "".join(items) + "</div>"
+
+    candidate_items = []
+    candidate_shown = list(previews)[-5:]
+    candidate_offset = len(previews) - len(candidate_shown)
+    for position, text in enumerate(candidate_shown, start=candidate_offset + 1):
+        clean = " ".join(str(text).split())[:80] or "(empty answer)"
+        clean = clean.replace("%", " percent")
+        newest = " new" if position == len(previews) else ""
+        candidate_items.append(f'<span class="candidate{newest}">{esc(clean)}</span>')
+    candidates_html = (
+        '<div class="candidate-label">Candidate answers</div><div class="candidates">'
+        + "".join(candidate_items) + "</div>"
+    )
+    clock_html = f'<span class="lclock" aria-hidden="true">{int(max(elapsed, 0.0))} s</span>'
+
     return f"""
     <div class="loading card" role="status" aria-live="polite">
-        <div class="spin" aria-hidden="true"></div>
-        <div>
-            <div class="ltitle">{esc(title)}</div>
-            <div class="lsub">{esc(detail)}</div>
+        <div class="answer-skeleton" aria-hidden="true">
+            <div>
+                <div class="skeleton-heading"><span class="eyebrow">CONSENSUS ANSWER</span><span class="preparing-tag">PREPARING</span></div>
+                <div class="skeleton-lines"><i class="skeleton-line"></i><i class="skeleton-line"></i><i class="skeleton-line"></i></div>
+                <div class="thinking"><i></i><i></i><i></i><span>Thinking</span></div>
+            </div>
+            <div class="skeleton-gauge"><span>MEASURING</span></div>
+        </div>
+        <div class="lmain">
+            <div class="lhead"><div class="ltitle">{safe_loading_text(title)}</div>{clock_html}</div>
+            <div class="lsub">{safe_loading_text(loading_detail)}</div>
+            {pipe_html}
+            {candidates_html}
+            {preview_html}
         </div>
         <div class="lbar" aria-hidden="true"></div>
     </div>
@@ -1072,7 +1074,13 @@ def empty_state_html() -> str:
     """
 
 
-def gauge_svg(probability: float, threshold: float, decision: str, score_valid: bool = True) -> str:
+def gauge_svg(
+    probability: float,
+    threshold: float,
+    decision: str,
+    score_valid: bool = True,
+    fresh: bool = False,
+) -> str:
     """Draw the gauge. When score_valid is False no probability is drawn or printed."""
     cx = cy = 140
     radius = 100
@@ -1101,10 +1109,12 @@ def gauge_svg(probability: float, threshold: float, decision: str, score_valid: 
     x2, y2 = point(radius + 17)
     lx, ly = point(radius + 33)
 
-    if decision == "TRUST":
-        stop_a, stop_b, word_color = "#34d399", "#06b6d4", "#059669"
+    if score_valid:
+        stop_a, stop_b = "var(--accent)", "var(--accent-2)"
     else:
-        stop_a, stop_b, word_color = "#fcd34d", "#f97316", "#b45309"
+        stop_a, stop_b = "var(--verify)", "var(--verify)"
+    word_color = "var(--trust)" if decision == "TRUST" else "var(--verify)"
+    ring_class = "ring-prog fresh-ring" if fresh and score_valid else "ring-prog"
 
     return f"""
     <svg class="gauge" viewBox="0 0 280 280" role="img"
@@ -1115,20 +1125,20 @@ def gauge_svg(probability: float, threshold: float, decision: str, score_valid: 
                 <stop offset="1" stop-color="{stop_b}"/>
             </linearGradient>
         </defs>
-        <circle cx="{cx}" cy="{cy}" r="{radius}" fill="#ffffff" stroke="#e8ecfb" stroke-width="18"/>
-        <circle cx="{cx}" cy="{cy}" r="{zone_radius}" fill="none" stroke="#10b981" stroke-opacity="0.4"
+        <circle cx="{cx}" cy="{cy}" r="{radius}" fill="var(--surface)" stroke="var(--surface-2)" stroke-width="18"/>
+        <circle cx="{cx}" cy="{cy}" r="{zone_radius}" fill="none" stroke="var(--trust)" stroke-opacity="0.4"
                 stroke-width="5" stroke-linecap="round" stroke-dasharray="{zone_dash:.2f} {zone_circ:.2f}"
                 stroke-dashoffset="{-zone_start:.2f}" transform="rotate(-90 {cx} {cy})"/>
-        <circle class="ring-prog" cx="{cx}" cy="{cy}" r="{radius}" fill="none" stroke="url(#ringgrad)"
+        <circle class="{ring_class}" cx="{cx}" cy="{cy}" r="{radius}" fill="none" stroke="url(#ringgrad)"
                 stroke-width="18" stroke-linecap="round" stroke-dasharray="{circumference:.2f}"
                 stroke-dashoffset="{offset:.2f}" style="--circ:{circumference:.2f};--off:{offset:.2f}"
                 transform="rotate(-90 {cx} {cy})"/>
-        <line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="#0f172a" stroke-width="3" stroke-linecap="round"/>
-        <text x="{lx:.2f}" y="{ly + 4:.2f}" text-anchor="middle" font-size="12" font-weight="700" fill="#475569"
+        <line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="var(--text)" stroke-width="3" stroke-linecap="round"/>
+        <text x="{lx:.2f}" y="{ly + 4:.2f}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--muted)"
               style="font-family:inherit">{pct_plain(threshold)}%</text>
-        <text x="{cx}" y="{cy + 14}" text-anchor="middle" font-size="50" font-weight="800" fill="#0f172a"
+        <text x="{cx}" y="{cy + 14}" text-anchor="middle" font-size="50" font-weight="800" fill="var(--text)"
               style="font-family:inherit">{value_text}</text>
-        <text x="{cx}" y="{cy + 40}" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="1.6" fill="#64748b"
+        <text x="{cx}" y="{cy + 40}" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="1.6" fill="var(--muted)"
               style="font-family:inherit">{caption_text}</text>
         <text x="{cx}" y="{cy + 66}" text-anchor="middle" font-size="14" font-weight="800" letter-spacing="2" fill="{word_color}"
               style="font-family:inherit">{decision}</text>
@@ -1136,7 +1146,9 @@ def gauge_svg(probability: float, threshold: float, decision: str, score_valid: 
     """
 
 
-def result_html(view: dict) -> str:
+def result_html(view: dict, fresh: bool = False) -> str:
+    import urllib.parse
+
     decision = view["decision"]
     state = decision.lower()
     probability = view["probability"]
@@ -1148,8 +1160,8 @@ def result_html(view: dict) -> str:
     if decision == "TRUST":
         icon = (
             '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">'
-            '<path d="M12 2.5l8 3v6.2c0 4.6-3.2 8.3-8 9.8-4.8-1.5-8-5.2-8-9.8V5.5l8-3z" stroke="#047857" stroke-width="1.8"/>'
-            '<path d="M8.2 12.2l2.6 2.6 5-5.4" stroke="#047857" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+            '<path d="M12 2.5l8 3v6.2c0 4.6-3.2 8.3-8 9.8-4.8-1.5-8-5.2-8-9.8V5.5l8-3z" stroke="var(--trust)" stroke-width="1.8"/>'
+            '<path d="M8.2 12.2l2.6 2.6 5-5.4" stroke="var(--trust)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
         )
         message = (
             "<b>Trust recommended.</b> The sampled answers and token confidence "
@@ -1159,8 +1171,8 @@ def result_html(view: dict) -> str:
     else:
         icon = (
             '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">'
-            '<circle cx="12" cy="12" r="9" stroke="#92400e" stroke-width="2"/>'
-            '<path d="M12 7.5v5.2M12 16.5h.01" stroke="#92400e" stroke-width="2.2" stroke-linecap="round"/></svg>'
+            '<circle cx="12" cy="12" r="9" stroke="var(--verify)" stroke-width="2"/>'
+            '<path d="M12 7.5v5.2M12 16.5h.01" stroke="var(--verify)" stroke-width="2.2" stroke-linecap="round"/></svg>'
         )
         if not view.get("calibrated", True):
             message = (
@@ -1181,6 +1193,8 @@ def result_html(view: dict) -> str:
                 "materially different useful claims, so the final recommendation is VERIFY. "
                 "Agreement among samples is required before a reliability score can authorize trust."
             )
+        elif view.get("fact_verification_status", "UNVERIFIED") == "UNSUPPORTED":
+            message = ""
         elif view.get("fact_verification_status", "UNVERIFIED") != "VERIFIED":
             message = (
                 "<b>Independent verification required.</b> "
@@ -1206,39 +1220,70 @@ def result_html(view: dict) -> str:
             f'<b>{raw_value}</b></div>'
         )
 
+    reveal_words = 0
+    if fresh:
+        source_answer = str(view["answer"]) if view["quality_ok"] and view["answer"] else answer_text
+        word_parts = re.split(r"(\s+)", source_answer)
+        rendered_parts = []
+        word_index = 0
+        for part in word_parts:
+            if part and not part.isspace():
+                if word_index < 60:
+                    rendered_parts.append(
+                        f'<span class="answer-word" style="--i:{word_index}">{esc(part)}</span>'
+                    )
+                else:
+                    rendered_parts.append(esc(part))
+                word_index += 1
+            else:
+                rendered_parts.append(esc(part))
+        answer_text = "".join(rendered_parts)
+        reveal_words = min(word_index, 60)
+
     verification_status = view.get("fact_verification_status", "UNVERIFIED")
     verification_reason = view.get("fact_verification_reason", "No independent verification result.")
     verification_evidence = view.get("fact_verification_evidence", "")
     verification_url = view.get("fact_verification_source_url", "")
+    unsupported = verification_status == "UNSUPPORTED"
     verification_class = "verified" if verification_status == "VERIFIED" else "failed"
     verification_heading = {
         "VERIFIED": "Independent verification: VERIFIED",
         "CONTRADICTED": "Independent verification: CONTRADICTED",
         "UNVERIFIED": "Independent verification: UNVERIFIED",
-        "UNSUPPORTED": "Independent verification: UNSUPPORTED QUESTION TYPE",
+        "UNSUPPORTED": "Can't be independently verified",
         "UNAVAILABLE": "Independent verification: SOURCE UNAVAILABLE",
     }.get(verification_status, "Independent verification: UNVERIFIED")
     verification_link = (
         f'<div><a href="{esc(verification_url)}" target="_blank" rel="noopener noreferrer">Open reference source</a></div>'
-        if verification_url else ""
+        if verification_url and not unsupported else ""
     )
-    verification_detail = f"{esc(verification_reason)}"
-    if verification_evidence:
-        verification_detail += f" {esc(verification_evidence)}"
+    if unsupported:
+        verification_detail = (
+            "Only percentage math and capital cities have a verifier, so the gate recommends "
+            "VERIFY; this does not mean the answer is wrong."
+        )
+    else:
+        verification_detail = esc(verification_reason)
+        if verification_evidence:
+            verification_detail += f" {esc(verification_evidence)}"
     verification_html = (
-        f'<div class="verification-note {verification_class}">'
+        f'<div class="verification-note {verification_class}"'
+        f'{" data-status=\"UNSUPPORTED QUESTION TYPE\"" if unsupported else ""}>'
         f'<b>{esc(verification_heading)}</b><div>{verification_detail}</div>{verification_link}</div>'
     )
 
     calibrated = view.get("calibrated", True)
     if not calibrated:
         chip_text = "Calibration refresh required"
-    elif view.get("fact_verification_status", "UNVERIFIED") != "VERIFIED":
+    elif unsupported:
+        chip_text = ""
+    elif verification_status != "VERIFIED":
         chip_text = "Independent verification required"
     elif not score_valid:
         chip_text = "Reliability not reported"
     else:
         chip_text = f"Trust threshold: {thr_text}%"
+
     if not view["quality_ok"]:
         comparison_caption = (
             'N/A — reliability not reported for a non-answer → <em class="verify">VERIFY</em>'
@@ -1247,27 +1292,27 @@ def result_html(view: dict) -> str:
         comparison_caption = (
             'N/A — calibration unavailable or unvalidated → <em class="verify">VERIFY</em>'
         )
-    elif view.get("fact_verification_status", "UNVERIFIED") != "VERIFIED":
+    elif unsupported:
+        comparison_caption = ""
+    elif verification_status != "VERIFIED":
         comparison_caption = (
             'N/A — independent verification incomplete → <em class="verify">VERIFY</em>'
         )
     elif not score_valid:
-        comparison_caption = (
-            'N/A — reliability not reported → <em class="verify">VERIFY</em>'
-        )
-    elif view["quality_ok"]:
+        comparison_caption = 'N/A — reliability not reported → <em class="verify">VERIFY</em>'
+    else:
         comparison_caption = (
             f"{probability * 100:.1f}% {comparator} {thr_text}% → "
             f'<em class="{state}">{decision}</em>'
         )
-    else:
-        comparison_caption = '<em class="verify">VERIFY</em>'
 
     if not view["quality_ok"]:
         disclaimer = "N/A — reliability not reported for a non-answer. The quality check only detects obvious response failures."
     elif not calibrated:
         disclaimer = "Reliability estimate unavailable: the loaded calibration is not validated for the current model, prompt and generation settings."
-    elif view.get("fact_verification_status", "UNVERIFIED") != "VERIFIED":
+    elif unsupported:
+        disclaimer = ""
+    elif verification_status != "VERIFIED":
         disclaimer = "No reliability score is reported because this answer lacks an independent verification result. The verifier supports only a limited set of question types."
     else:
         disclaimer = (
@@ -1275,32 +1320,54 @@ def result_html(view: dict) -> str:
             "this answer is correct. It is a decision policy, not a guarantee of factual truth."
         )
 
+    open_ended_html = ""
+    if is_open_ended(view["question"]):
+        open_ended_html = (
+            '<div class="hint-note"><b>Open-ended request.</b>'
+            "The gate is built for short factual questions (answers are capped at about 48 tokens), "
+            "so long explanations or word-count requests cannot be scored reliably.</div>"
+        )
+    meta_html = f"Checked in {view.get('latency', 0.0):.1f} s · {esc(view.get('runtime', 'Unknown'))}"
+    search_link = ""
+    if decision == "VERIFY":
+        query = urllib.parse.quote_plus(str(view["question"]))
+        search_link = (
+            f'<a class="verify-link" href="https://www.google.com/search?q={query}" '
+            'target="_blank" rel="noopener noreferrer">Search the web for this</a>'
+        )
+    threshold_chip = f'<div class="thr-chip">{chip_text}</div>' if chip_text else ""
+    decision_html = f'<div class="decision-msg">{message}</div>' if message else ""
+    disclaimer_html = f'<div class="disclaimer">{disclaimer}</div>' if disclaimer else ""
+    fresh_class = " fresh" if fresh else ""
+    badge_delay = reveal_words * 45 if fresh else 0
+
     return f"""
-    <div class="rc-wrap {state}">
+    <div class="rc-wrap {state}{fresh_class}" style="--answer-delay:{badge_delay}ms">
         <div class="rc">
             <div>
                 <div class="eyebrow">Consensus answer</div>
                 <div class="answer">{answer_text}</div>
                 {raw_output_html}
                 {verification_html}
+                {open_ended_html}
                 <div class="badge-row">
                     <div class="badge {state}" role="status" aria-label="Final decision: {decision}">{icon}{decision}</div>
-                    <div class="thr-chip">{chip_text}</div>
+                    {threshold_chip}
+                    {search_link}
                 </div>
-                <div class="decision-msg">{message}</div>
+                {decision_html}
+                <div class="meta-line">{meta_html}</div>
                 <div class="qecho"><b>Question</b> · {esc(view["question"])}</div>
-                <div class="disclaimer">{disclaimer}</div>
+                {disclaimer_html}
             </div>
             <div class="gauge-col">
-                <div class="eyebrow" style="margin-bottom:6px">Reliability estimate</div>
-                {gauge_svg(probability, threshold, decision, score_valid)}
+                <div class="eyebrow">Reliability estimate</div>
+                {gauge_svg(probability, threshold, decision, score_valid, fresh)}
                 <div class="meter">
                     <div class="meter-fill {state}" style="--w:{(probability * 100 if score_valid else 0.0):.2f}%"></div>
                     <div class="meter-mark" style="left:{threshold * 100:.2f}%"><span>{thr_text}%</span></div>
                 </div>
-                <div class="meter-cap">
-                    {comparison_caption}
-                </div>
+                <div class="meter-cap">{comparison_caption}</div>
             </div>
         </div>
     </div>
@@ -1324,7 +1391,7 @@ def metric_card(
     sub_html = f'<div class="msub">{esc(sub)}</div>' if sub else ""
 
     return f"""
-    <div class="mcard" style="--accent:{accent};animation-delay:{delay:.2f}s" title="{esc(note)}">
+    <div class="mcard" style="--metric-accent:{accent};animation-delay:{delay:.2f}s" title="{esc(note)}">
         <div class="mlabel">{esc(label)}</div>
         <div class="mvalue">{esc(value)}</div>
         {bar_html}
@@ -1343,7 +1410,7 @@ def signals_html(view: dict) -> str:
             "Answer agreement",
             f"{view['agreement'] * 100:.0f}%",
             METRIC_NOTES["agreement"],
-            "#6366f1",
+            "var(--accent)",
             bar=view["agreement"],
             sub=f"{round(view['agreement'] * n)} of {n} samples in the largest group",
             delay=0.0,
@@ -1352,7 +1419,7 @@ def signals_html(view: dict) -> str:
             "Consensus margin",
             f"{view['margin'] * 100:.0f}%",
             METRIC_NOTES["margin"],
-            "#7c3aed",
+            "var(--accent)",
             bar=view["margin"],
             sub="Winner vs. runner-up",
             delay=0.06,
@@ -1361,7 +1428,7 @@ def signals_html(view: dict) -> str:
             "Answer-key entropy",
             f"{view['entropy']:.3f}",
             METRIC_NOTES["entropy"],
-            "#0ea5e9",
+            "var(--info)",
             bar=view["entropy"] / max_entropy,
             sub=f"Maximum {max_entropy:.2f} for {n} distinct answers",
             delay=0.12,
@@ -1370,7 +1437,7 @@ def signals_html(view: dict) -> str:
             "Mean token log-probability",
             f"{view['mean_lp']:.3f}",
             METRIC_NOTES["mean_lp"],
-            "#06b6d4",
+            "var(--accent-2)",
             sub=f"≈ {token_probability(view['mean_lp']) * 100:.0f}% geometric-mean token probability",
             delay=0.18,
         ),
@@ -1378,7 +1445,7 @@ def signals_html(view: dict) -> str:
             "Minimum token log-probability",
             f"{view['min_lp']:.3f}",
             METRIC_NOTES["min_lp"],
-            "#14b8a6",
+            "var(--accent-2)",
             sub=f"≈ {token_probability(view['min_lp']) * 100:.0f}% weakest-token probability",
             delay=0.24,
         ),
@@ -1533,16 +1600,34 @@ def sidebar_html(threshold: float | None, history: list[dict]) -> str:
 
 st.session_state.setdefault("question_input", "")
 st.session_state.setdefault("result", None)
+st.session_state.setdefault("fresh_result", False)
 st.session_state.setdefault("history", [])
+st.session_state.setdefault("auto_run", False)
+if "theme_choice" not in st.session_state:
+    query_theme = str(st.query_params.get("theme", "daylight")).strip().lower()
+    initial_theme = query_theme if query_theme in THEMES else "daylight"
+    st.session_state["theme_choice"] = THEMES[initial_theme]["label"]
+active_theme = str(st.session_state["theme_choice"]).strip().lower()
+if active_theme not in THEMES:
+    active_theme = "daylight"
+    st.session_state["theme_choice"] = THEMES[active_theme]["label"]
+
+
+def update_theme_query() -> None:
+    st.query_params["theme"] = str(st.session_state["theme_choice"]).strip().lower()
 
 
 def use_example(example: str) -> None:
+    """An example chip fills the box and runs the check in one click."""
     st.session_state["question_input"] = example
+    st.session_state["auto_run"] = True
 
 
 def clear_all() -> None:
     st.session_state["question_input"] = ""
     st.session_state["result"] = None
+    st.session_state["fresh_result"] = False
+    st.session_state["auto_run"] = False
 
 
 # ============================================================
@@ -1550,9 +1635,48 @@ def clear_all() -> None:
 # ============================================================
 
 st.html(CSS)
-render(ORBS)
+st.html(theme_css(active_theme))
 
-# The page renders immediately. Qwen is NOT loaded here; see the click handler below.
+theme_spacer, theme_column = st.columns([5, 2])
+with theme_column:
+    try:
+        st.segmented_control(
+            "Theme",
+            [THEMES[name]["label"] for name in THEMES],
+            key="theme_choice",
+            label_visibility="collapsed",
+            on_change=update_theme_query,
+        )
+    except AttributeError:
+        st.radio(
+            "Theme",
+            [THEMES[name]["label"] for name in THEMES],
+            key="theme_choice",
+            horizontal=True,
+            label_visibility="collapsed",
+            on_change=update_theme_query,
+        )
+
+# Sidebar is painted immediately (not at the end of the script) so the page never looks half loaded.
+sidebar_slot = st.sidebar.empty()
+
+
+def paint_sidebar() -> None:
+    state = process_state()
+    sidebar_slot.markdown(
+        html_block(
+            sidebar_html(
+                state["threshold"] if state["calibrated"] else None,
+                st.session_state["history"],
+            )
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+paint_sidebar()
+
+# The page renders immediately. Qwen is NOT loaded here; see the run handler below.
 _state = process_state()
 load_error = _state["error"]
 
@@ -1571,7 +1695,7 @@ if calibration_banner:
     calibration_slot.markdown(html_block(calibration_banner), unsafe_allow_html=True)
 
 
-# ---------------- input card ----------------
+# ---------------- compact input card ----------------
 
 try:
     input_box = st.container(key="input_card")
@@ -1581,33 +1705,42 @@ except TypeError:  # older Streamlit without container keys
 with input_box:
     render(
         """
-        <div class="card-head">Ask the model</div>
-        <div class="card-sub">
-            Ask a factual question. The gate samples several answers and estimates
-            whether you can rely on them.
+        <div class="ask-head">
+            <b>Ask the model</b>
+            <span>Short factual questions work best. The gate samples several answers and estimates whether you can rely on them.</span>
         </div>
         """
     )
 
     with st.form("reliability_form", clear_on_submit=False):
-        st.text_input(
-            "Question",
-            key="question_input",
-            placeholder="Ask a factual question...",
-            label_visibility="collapsed",
-        )
-        run_clicked = st.form_submit_button(
-            "Check Reliability",
-            type="primary",
-            use_container_width=True,
-        )
+        try:
+            input_column, button_column = st.columns([5, 1.3], vertical_alignment="bottom")
+        except TypeError:  # older Streamlit without vertical_alignment
+            input_column, button_column = st.columns([5, 1.3])
+        with input_column:
+            st.text_input(
+                "Question",
+                key="question_input",
+                placeholder="Ask a short factual question...",
+                label_visibility="collapsed",
+            )
+        with button_column:
+            run_clicked = st.form_submit_button(
+                "Check Reliability",
+                type="primary",
+                use_container_width=True,
+            )
 
     render('<div class="mini-label">Try an example</div>')
 
-    chip_columns = st.columns(2)
-    for column_index, column in enumerate(chip_columns):
-        with column:
-            for example in EXAMPLE_QUESTIONS[column_index::len(chip_columns)]:
+    try:
+        example_chip_box = st.container(key="example_chips")
+    except TypeError:  # older Streamlit without keyed containers
+        example_chip_box = st.container()
+    with example_chip_box:
+        chip_columns = st.columns(len(EXAMPLE_QUESTIONS) + 1)
+        for column, example in zip(chip_columns, EXAMPLE_QUESTIONS):
+            with column:
                 st.button(
                     example,
                     key=f"example_{example}",
@@ -1615,10 +1748,11 @@ with input_box:
                     args=(example,),
                     use_container_width=True,
                 )
+        with chip_columns[-1]:
+            st.button("Clear", key="clear_button", on_click=clear_all, use_container_width=True)
 
-    _, clear_column = st.columns([4, 1])
-    with clear_column:
-        st.button("Clear", on_click=clear_all, use_container_width=True)
+# An example chip sets auto_run in its callback; consume it exactly once.
+run_clicked = bool(run_clicked) or bool(st.session_state.pop("auto_run", False))
 
 
 # ---------------- run the gate (only on the submit rerun) ----------------
@@ -1642,130 +1776,185 @@ if run_clicked:
             unsafe_allow_html=True,
         )
 
-    elif not state["lock"].acquire(blocking=False):
-        # Another click/session is mid-inference; never run two generations on the GPU at once.
-        notice_slot.markdown(
-            html_block(
-                notice_html(
-                    "warn",
-                    "A check is already running",
-                    "Wait for the current check to finish, then try again.",
-                )
-            ),
-            unsafe_allow_html=True,
-        )
-
     else:
-        try:
-            gate = None
-            new_view = None
-            hero_slot.markdown(html_block(hero_html("loading")), unsafe_allow_html=True)
+        st.session_state["result"] = None
+        st.session_state["fresh_result"] = False
+        calibration_slot.empty()
 
-            def show_stage(stage: str) -> None:
-                status_slot.markdown(
-                    html_block(
-                        loading_html(
-                            stage,
-                            "Still working · local inference can take a while.",
-                        )
-                    ),
-                    unsafe_allow_html=True,
-                )
-
-            try:
-                gate, load_error, new_view = load_and_run(
-                    state["loaded"], question_text, show_stage
-                )
-                if gate is not None and new_view is None:
-                    raise ValueError("The reliability gate returned no result.")
-            except (AttributeError, TypeError, ValueError, KeyError) as exc:
-                logger.exception("Gate returned an unexpected result")
-                gate = None
-                st.session_state["result"] = None
-                load_error = {
-                    "title": "Unexpected result",
-                    "body": "The gate returned a result the interface could not read. Please try again.",
-                    "detail": f"{type(exc).__name__}: {exc}",
-                }
-            except Exception as exc:
-                logger.exception("Inference failed")
-                gate = None
-                st.session_state["result"] = None
-
-                if "out of memory" in str(exc).lower():
-                    title = "GPU memory is full"
-                    body = (
-                        "The 4 GB GPU ran out of memory during generation. Close other "
-                        "GPU-heavy applications and try again."
+        def show_wait(waited: float) -> None:
+            status_slot.markdown(
+                html_block(
+                    loading_html(
+                        "Waiting for another check to finish",
+                        "Still working · only one generation runs on the GPU at a time.",
+                        elapsed=waited,
                     )
-                    if torch is not None:
-                        try:
-                            torch.cuda.empty_cache()
-                        except Exception:
-                            pass
-                else:
-                    title = "The gate could not finish"
-                    body = (
-                        "Something went wrong while generating or scoring the answers. "
-                        "Please try again."
-                    )
-                load_error = {
-                    "title": title,
-                    "body": body,
-                    "detail": f"{type(exc).__name__}: {exc}",
-                }
+                ),
+                unsafe_allow_html=True,
+            )
 
-            if state["loaded"] and state["calibrated"]:
-                calibration_slot.empty()
-            elif state["loaded"]:
-                calibration_slot.markdown(
-                    html_block(
-                        notice_html(
-                            "warn",
-                            "Calibration refresh required",
-                            state["calibration_note"],
-                        )
-                    ),
-                    unsafe_allow_html=True,
-                )
-
-            if gate is None:
-                hero_status = "online" if state["loaded"] else "offline"
-                hero_slot.markdown(
-                    html_block(hero_html(hero_status, state["runtime"])),
-                    unsafe_allow_html=True,
-                )
-                notice_slot.markdown(
-                    html_block(
-                        notice_html(
-                            "error",
-                            (load_error or {}).get("title", "Model unavailable"),
-                            (load_error or {}).get("body", "The local model is not available."),
-                        )
-                    ),
-                    unsafe_allow_html=True,
-                )
-            else:
-                hero_slot.markdown(
-                    html_block(hero_html("online", runtime_label(gate))),
-                    unsafe_allow_html=True,
-                )
-                st.session_state["result"] = new_view
-                st.session_state["history"] = (
-                    [
-                        {
-                            "question": new_view["question"],
-                            "decision": new_view["decision"],
-                            "probability": new_view["probability"],
-                            "score_valid": new_view["score_valid"],
-                        }
-                    ]
-                    + st.session_state["history"]
-                )[:HISTORY_LIMIT]
-
-        finally:
+        if not acquire_run_lock(state, show_wait):
             status_slot.empty()
-            state["lock"].release()
+            notice_slot.markdown(
+                html_block(
+                    notice_html(
+                        "warn",
+                        "A check is already running",
+                        "Wait for the current check to finish, then try again.",
+                    )
+                ),
+                unsafe_allow_html=True,
+            )
+        else:
+            try:
+                gate = None
+                new_view = None
+                hero_slot.markdown(html_block(hero_html("loading")), unsafe_allow_html=True)
+
+                live = {
+                    "stage": "",
+                    "done": 0,
+                    "previews": [],
+                    "t0": perf_counter(),
+                    "ready": bool(state["loaded"]),
+                }
+
+                def paint() -> None:
+                    stage = live["stage"]
+                    active = stage_step(stage)
+                    if live["done"] and active == 1:
+                        detail = f"Still working · {live['done']} of {N_SAMPLES} answers written."
+                    else:
+                        detail = "Still working · local inference can take a while."
+                    status_slot.markdown(
+                        html_block(
+                            loading_html(
+                                stage,
+                                detail,
+                                active=active,
+                                samples_done=live["done"],
+                                samples_total=N_SAMPLES,
+                                previews=live["previews"],
+                                elapsed=perf_counter() - live["t0"],
+                                model_ready=live["ready"],
+                            )
+                        ),
+                        unsafe_allow_html=True,
+                    )
+
+                def show_stage(stage: str) -> None:
+                    live["stage"] = stage
+                    if stage.startswith("Sampling"):
+                        live["done"] = 0
+                        live["previews"] = []
+                    paint()
+
+                def show_progress(done: int, total: int, text: str) -> None:
+                    live["done"] = done
+                    live["previews"].append(text)
+                    paint()
+
+                try:
+                    gate, load_error, new_view = load_and_run(
+                        state["loaded"], question_text, show_stage, show_progress
+                    )
+                    if gate is not None and new_view is None:
+                        raise ValueError("The reliability gate returned no result.")
+                except (AttributeError, TypeError, ValueError, KeyError) as exc:
+                    logger.exception("Gate returned an unexpected result")
+                    gate = None
+                    st.session_state["result"] = None
+                    load_error = {
+                        "title": "Unexpected result",
+                        "body": "The gate returned a result the interface could not read. Please try again.",
+                        "detail": f"{type(exc).__name__}: {exc}",
+                    }
+                except Exception as exc:
+                    logger.exception("Inference failed")
+                    gate = None
+                    st.session_state["result"] = None
+
+                    if "out of memory" in str(exc).lower():
+                        title = "GPU memory is full"
+                        body = (
+                            "The 4 GB GPU ran out of memory during generation. Close other "
+                            "GPU-heavy applications and try again."
+                        )
+                        if torch is not None:
+                            try:
+                                torch.cuda.empty_cache()
+                            except Exception:
+                                pass
+                    else:
+                        title = "The gate could not finish"
+                        body = (
+                            "Something went wrong while generating or scoring the answers. "
+                            "Please try again."
+                        )
+                    load_error = {
+                        "title": title,
+                        "body": body,
+                        "detail": f"{type(exc).__name__}: {exc}",
+                    }
+
+                if state["loaded"] and state["calibrated"]:
+                    calibration_slot.empty()
+                elif state["loaded"]:
+                    calibration_slot.markdown(
+                        html_block(
+                            notice_html(
+                                "warn",
+                                "Calibration refresh required",
+                                state["calibration_note"],
+                            )
+                        ),
+                        unsafe_allow_html=True,
+                    )
+
+                if gate is None:
+                    hero_status = "online" if state["loaded"] else "offline"
+                    hero_slot.markdown(
+                        html_block(hero_html(hero_status, state["runtime"])),
+                        unsafe_allow_html=True,
+                    )
+                    notice_slot.markdown(
+                        html_block(
+                            notice_html(
+                                "error",
+                                (load_error or {}).get("title", "Model unavailable"),
+                                (load_error or {}).get("body", "The local model is not available."),
+                            )
+                        ),
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    hero_slot.markdown(
+                        html_block(hero_html("online", runtime_label(gate))),
+                        unsafe_allow_html=True,
+                    )
+                    st.session_state["result"] = new_view
+                    st.session_state["history"] = (
+                        [
+                            {
+                                "question": new_view["question"],
+                                "decision": new_view["decision"],
+                                "probability": new_view["probability"],
+                                "score_valid": new_view["score_valid"],
+                            }
+                        ]
+                        + st.session_state["history"]
+                    )[:HISTORY_LIMIT]
+                    st.session_state["fresh_result"] = True
+
+            finally:
+                # Release FIRST. When a rerun (Clear, new question) interrupts this script,
+                # Streamlit raises from the next st.* call, including the one below. If that
+                # call came first the lock would never be released and every later check
+                # would report "A check is already running".
+                state["lock"].release()
+                status_slot.empty()
+
+            paint_sidebar()
 
 
 # ---------------- model-load error detail ----------------
@@ -1784,7 +1973,10 @@ if current is None:
     if load_error is None:
         render(empty_state_html())
 else:
-    render(result_html(current))
+    fresh_result = bool(st.session_state.get("fresh_result", False))
+    render(result_html(current, fresh=fresh_result))
+    if fresh_result:
+        st.session_state["fresh_result"] = False
 
     render(
         """
@@ -1808,14 +2000,3 @@ render(
     '<div class="foot">Everything runs locally · Reliability is an estimate, '
     "not a guarantee of truth</div>"
 )
-
-
-# ---------------- sidebar (rendered last so session history is current) ----------------
-
-with st.sidebar:
-    render(
-        sidebar_html(
-            process_state()["threshold"] if process_state()["calibrated"] else None,
-            st.session_state["history"],
-        )
-    )

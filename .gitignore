@@ -16,3 +16,5 @@ artifacts/results/*
 *.bin
 *.pt
 *.pth
+!artifacts/classifier/reliability_gate_final_v5.pkl
+tests/OneDrive - Personal - Shortcut.lnk

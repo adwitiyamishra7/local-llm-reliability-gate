@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from threading import Lock
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 DEFAULT_MODEL_NAME = "Qwen/Qwen3-0.6B"
+
+_WARMUP_LOCK = Lock()
+_WARMUP_MODEL = None
+_WARMUP_DONE = False
 
 
 @dataclass
@@ -66,3 +71,47 @@ def load_local_llm(
         model=model,
         device=device,
     )
+
+
+def warm_up(model: LocalLLM | None = None) -> LocalLLM:
+    """Load (and cache) the local model if needed, then run a one-token warm-up once."""
+    global _WARMUP_MODEL, _WARMUP_DONE
+
+    with _WARMUP_LOCK:
+        target = model
+        if target is None:
+            if _WARMUP_MODEL is None:
+                _WARMUP_MODEL = load_local_llm()
+            target = _WARMUP_MODEL
+            if _WARMUP_DONE:
+                return target
+        elif getattr(target, "_gate_warmed_up", False):
+            return target
+
+        # Lazy import avoids the model <-> generation import cycle.
+        from src.gate.generation import generate_one
+
+        generate_one(
+            target,
+            "Warm-up.",
+            max_new_tokens=1,
+            do_sample=False,
+        )
+
+        if model is None:
+            _WARMUP_DONE = True
+        else:
+            setattr(target, "_gate_warmed_up", True)
+        return target
+
+
+def get_device_label() -> str:
+    """Return a short display label for the selected runtime device."""
+    device = get_device()
+    if device.type != "cuda":
+        return "CPU"
+    try:
+        gpu_name = torch.cuda.get_device_name(0)
+    except Exception:
+        gpu_name = "GPU"
+    return f"CUDA · {gpu_name}"

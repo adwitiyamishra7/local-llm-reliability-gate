@@ -112,28 +112,48 @@ def test_streamlit_form_submission_updates_status_and_runs_once(monkeypatch):
         return original_markdown(self, body, *args, **kwargs)
 
     def record_stylesheet(body, *args, **kwargs):
-        if isinstance(body, str) and "<style>" in body and "--indigo:" in body:
+        if isinstance(body, str) and "<style>" in body:
             stylesheet_markup.append(body)
         return original_html(body, *args, **kwargs)
+
+    def assert_stylesheet_pairs():
+        assert len(stylesheet_markup) % 2 == 0
+        for index in range(0, len(stylesheet_markup), 2):
+            pair = stylesheet_markup[index:index + 2]
+            big = [
+                body for body in pair
+                if "@media (max-width: 640px)" in body and "--grad:" in body
+            ]
+            theme = [
+                body for body in pair
+                if ":root{" in body and "color-scheme:" in body
+            ]
+            assert len(big) == 1 and len(theme) == 1
+            assert pair == [big[0], theme[0]]
 
     monkeypatch.setattr(DeltaGenerator, "markdown", record_loading)
     monkeypatch.setattr(streamlit, "html", record_stylesheet)
     streamlit.cache_resource.clear()
 
     try:
-        app = testing.AppTest.from_file(str(APP)).run(timeout=60)
+        app = testing.AppTest.from_file(str(APP))
+        app.query_params["theme"] = "IvOrY"
+        app.run(timeout=60)
         assert not app.exception
+        assert_stylesheet_pairs()
         initial_markup = "\n".join(item.value for item in app.markdown)
         assert 'class="notice info"' in initial_markup
         assert "Model not loaded yet" in initial_markup
         assert "Calibration refresh required" not in initial_markup
         assert metrics["constructed"] == 0  # first render stays lazy
-        assert len(stylesheet_markup) == 1
-        assert "@media (max-width: 640px)" in stylesheet_markup[0]
+        assert len(stylesheet_markup) == 2
+        assert "--accent:#86198f;" in stylesheet_markup[1]
+        assert app.session_state["theme_choice"] == "Ivory"
 
         # Empty form submission takes the UI validation path and never constructs a gate.
         app.text_input[0].set_value("   ")
         app.button[0].click().run(timeout=60)
+        assert_stylesheet_pairs()
         empty_markup = "\n".join(item.value for item in app.markdown)
         assert "Enter a question first" in empty_markup
         assert metrics["constructed"] == 0
@@ -142,6 +162,7 @@ def test_streamlit_form_submission_updates_status_and_runs_once(monkeypatch):
         # load_and_run/stage-hook/result path used by the Check Reliability control.
         app.text_input[0].set_value("Who wrote Hamlet?")
         app.button[0].click().run(timeout=60)
+        assert_stylesheet_pairs()
         assert not app.exception
         assert metrics == {"constructed": 1, "predicted": 1, "sampled": 1, "verified": 1}
         assert backend.sample_answers is sample_answers
@@ -165,18 +186,45 @@ def test_streamlit_form_submission_updates_status_and_runs_once(monkeypatch):
         assert 'class="badge verify" role="status" aria-label="Final decision: VERIFY"' in result_markup
         assert "Model not loaded yet" not in result_markup
 
+        # Theme changes rerender colors while retaining the question and result.
+        app.segmented_control[0].set_value("Midnight").run(timeout=60)
+        assert not app.exception
+        assert_stylesheet_pairs()
+        assert "--bg:#080c18;" in stylesheet_markup[-1]
+        assert app.query_params["theme"] == ["midnight"]
+        assert app.text_input[0].value == "Who wrote Hamlet?"
+        assert app.session_state["result"] is not None
+        assert metrics["predicted"] == 1
+        assert 'class="badge verify" role="status" aria-label="Final decision: VERIFY"' in "\n".join(
+            item.value for item in app.markdown
+        )
+
         # The form submit is consumed once; an ordinary rerun does not infer again.
         app.run(timeout=60)
+        assert_stylesheet_pairs()
         assert metrics["predicted"] == 1
 
         # Clear still resets the form value/result, and the visible submit control
         # can be used again without loading a second gate instance.
         next(button for button in app.button if button.label == "Clear").click().run(timeout=60)
+        assert_stylesheet_pairs()
         assert app.text_input[0].value == ""
         app.text_input[0].set_value("Who wrote Hamlet?")
         app.button[0].click().run(timeout=60)
+        assert_stylesheet_pairs()
         assert not app.exception
         assert metrics["constructed"] == 1
         assert metrics["predicted"] == 2
+
+        # An example chip fills the box AND runs the check in one click, exactly once.
+        next(button for button in app.button if button.label == "What is 15% of 240?").click().run(timeout=60)
+        assert_stylesheet_pairs()
+        assert not app.exception
+        assert app.text_input[0].value == "What is 15% of 240?"
+        assert metrics["constructed"] == 1
+        assert metrics["predicted"] == 3
+        app.run(timeout=60)
+        assert_stylesheet_pairs()
+        assert metrics["predicted"] == 3
     finally:
         streamlit.cache_resource.clear()

@@ -66,3 +66,7 @@ The V5 artifact is required for calibrated scoring. If it is absent or incompati
 The model can produce a fluent, specific, wrong answer. Sampling disagreement can catch some uncertainty, but unanimous model output is not independent evidence. The verifier therefore remains narrow by design. Extending it to a new claim type requires a real reference-backed verifier, tests, and a deliberate configuration/fingerprint update; heuristic guesses are not verification.
 
 The application displays generation latency and surfaces model/GPU failures. A rare long generation should be investigated as an environment or driver issue rather than hidden by an unbounded silent timeout.
+
+## Deployment
+
+See [DEPLOY_HF.md](DEPLOY_HF.md) for Hugging Face Spaces deployment preparation.

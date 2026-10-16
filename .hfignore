@@ -1,0 +1,13 @@
+# Preserve only the calibrated V5 inference artifact.
+artifacts/classifier/*.pkl
+!artifacts/classifier/reliability_gate_final_v5.pkl
+artifacts/classifier/*.csv
+artifacts/classifier/*.png
+artifacts/classifier/*.txt
+artifacts/classifier/selected_threshold_v4.json
+
+# Training/evaluation outputs and historical implementation copies.
+artifacts/results/
+scripts/
+*.bak_v3
+*_REPORT.md

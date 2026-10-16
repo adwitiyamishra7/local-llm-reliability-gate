@@ -20,6 +20,7 @@ import math
 import re
 import sys
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
@@ -36,7 +37,7 @@ from src.gate.model import load_local_llm
 from src.gate.generation import GenerationResult, generate_one
 from src.gate.agreement import answers_are_equivalent, grouped_answer_keys
 from src.gate.response_quality import assess_response_quality
-from src.gate.factual_verifier import verify_answer, VerificationResult
+from src.gate.factual_verifier import get_question_kind, verify_answer, VerificationResult
 
 
 from src.gate.config import (
@@ -57,6 +58,26 @@ from src.gate.config import (
 )
 
 FINAL_GATE_FILE = GATE_FILE_V5
+
+
+class GateCancelled(Exception):
+    """Raised when a caller requests cancellation between generated samples."""
+
+
+def _emit_progress(
+    callback: Callable[[str, int, int, str | None], object] | None,
+    stage: str,
+    current: int,
+    total: int,
+    detail: str | None = None,
+) -> None:
+    if callback is None:
+        return
+    try:
+        callback(stage, current, total, detail)
+    except Exception:
+        # UI/reporting callbacks must never affect the calibrated gate path.
+        pass
 
 
 @dataclass
@@ -94,6 +115,10 @@ class GateResult:
     fact_verification_reason: str = "No independent verification result."
     fact_verification_evidence: str = ""
     fact_verification_source_url: str = ""
+    # The current verifier distinguishes supported factual types from unsupported
+    # types, but does not identify open-ended subcategories separately.
+    question_kind: str = "unsupported"
+    user_message: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -146,10 +171,32 @@ def _truncation_flag(answer: str) -> int:
     return 0
 
 
-def sample_answers(llm, question: str) -> list[GenerationResult]:
+def sample_answers(
+    llm,
+    question: str,
+    *,
+    progress_callback: Callable[[str, int, int, str | None], object] | None = None,
+    should_cancel: Callable[[], bool] | None = None,
+) -> list[GenerationResult]:
     """The ONE sampling routine used by live inference and the benchmark runner."""
-    return [
-        generate_one(
+    if progress_callback is None and should_cancel is None:
+        # Keep the legacy/default call path identical when hooks are not requested.
+        return [
+            generate_one(
+                llm=llm,
+                question=question,
+                max_new_tokens=MAX_NEW_TOKENS,
+                do_sample=True,
+                temperature=TEMPERATURE,
+                top_p=TOP_P,
+                top_k=TOP_K,
+            )
+            for _ in range(N_SAMPLES)
+        ]
+
+    results: list[GenerationResult] = []
+    for index in range(N_SAMPLES):
+        result = generate_one(
             llm=llm,
             question=question,
             max_new_tokens=MAX_NEW_TOKENS,
@@ -158,8 +205,15 @@ def sample_answers(llm, question: str) -> list[GenerationResult]:
             top_p=TOP_P,
             top_k=TOP_K,
         )
-        for _ in range(N_SAMPLES)
-    ]
+        results.append(result)
+        detail = str(getattr(result, "answer", ""))[:80]
+        _emit_progress(progress_callback, "sampling", index + 1, N_SAMPLES, detail)
+
+        # Cancellation is cooperative and observed only between completed samples.
+        if index + 1 < N_SAMPLES and should_cancel is not None and should_cancel():
+            raise GateCancelled("Gate run cancelled between generated samples.")
+
+    return results
 
 
 class ReliabilityGate:
@@ -430,14 +484,27 @@ class ReliabilityGate:
         self,
         question: str,
         return_all_answers: bool = True,
+        *,
+        progress_callback: Callable[[str, int, int, str | None], object] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
     ) -> GateResult:
         question = question.strip()
 
         if not question:
             raise ValueError("Question must not be empty.")
 
-        results = sample_answers(self.llm, question)
+        if progress_callback is None and should_cancel is None:
+            # Preserve compatibility with existing patched/monkeypatched callers.
+            results = sample_answers(self.llm, question)
+        else:
+            results = sample_answers(
+                self.llm,
+                question,
+                progress_callback=progress_callback,
+                should_cancel=should_cancel,
+            )
 
+        _emit_progress(progress_callback, "agreement", 0, 1)
         features = self._build_features(
             question=question,
             results=results,
@@ -463,6 +530,7 @@ class ReliabilityGate:
         # Independent verification is deliberately narrow and fail-closed. It makes no
         # network call for unsupported question types; capital questions send only the
         # country/subject name to Wikidata, while supported percentage math is local.
+        _emit_progress(progress_callback, "verification", 0, 1)
         if info["quality_ok"]:
             try:
                 verification = verify_answer(question, answer)
@@ -492,6 +560,18 @@ class ReliabilityGate:
             )
             else "VERIFY"
         )
+        _emit_progress(progress_callback, "decision", 1, 1, decision)
+
+        question_kind = get_question_kind(question)
+        if question_kind == "unsupported":
+            user_message = (
+                "This looks like an open-ended question, so the gate can't score it reliably. "
+                "Verify the answer yourself."
+            )
+        elif decision == "TRUST":
+            user_message = "The answer passed the gate's calibrated checks."
+        else:
+            user_message = "The gate recommends verifying this answer."
 
         if not return_all_answers:
             answers = []
@@ -526,4 +606,6 @@ class ReliabilityGate:
             nonanswer_majority=info["nonanswer_majority"],
             material_disagreement=info["material_disagreement"],
             sample_useful=info["flags"],
+            question_kind=question_kind,
+            user_message=user_message,
         )

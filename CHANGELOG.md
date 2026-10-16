@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-15 — Backend and deployment readiness
+
+- Added minimal Streamlit toolbar mode, optional gate progress/cancellation hooks, idempotent model warm-up and device labeling, and additive question-result metadata.
+- Added CPU Hugging Face Spaces dependency/deployment guidance and backend regression tests; preserved the calibrated V5 inference artifact and decision path.
+
 ## V3 — initial reliability gate
 
 - Established the local Qwen sampling pipeline, 15 uncertainty features, calibrated ExtraTrees scoring, and the `TRUST`/`VERIFY` abstention policy.
