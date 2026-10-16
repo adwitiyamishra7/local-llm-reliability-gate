@@ -1,9 +1,8 @@
-transformers==5.19.0
-accelerate==1.15.0
-safetensors==0.8.0
-sentencepiece==0.2.2
+streamlit==1.65.0
+gradio_client
 numpy==2.5.3
 pandas==3.0.6
 scikit-learn==1.9.1
 joblib==1.6.0
 PyYAML==6.0.3
+requests

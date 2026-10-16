@@ -26,7 +26,9 @@ if str(ROOT_DIR) not in sys.path:
 
 from src.gate.agreement import answers_are_equivalent, extract_answer_key
 from src.gate.response_quality import assess_response_quality
-from src.gate.config import EXPECTED_FEATURES, GATE_FILE_V5, MODEL_NAME, N_SAMPLES
+from src.gate.config import EXPECTED_FEATURES, MODEL_NAME, N_SAMPLES
+from types import SimpleNamespace
+from gradio_client import Client
 
 # torch and ReliabilityGate are imported lazily (first "Check Reliability" click)
 # so the first page render never waits on torch/transformers.
@@ -521,7 +523,9 @@ def is_open_ended(question: str) -> bool:
 def stage_step(stage: str) -> int:
     """Map a pipeline stage title to the index of the visible progress step."""
     for prefix, index in (
+        ("Connecting", 0),
         ("Loading", 0),
+        ("Running hosted", 1),
         ("Sampling", 1),
         ("Extracting", 2),
         ("Classifying", 2),
@@ -537,109 +541,194 @@ def stage_step(stage: str) -> int:
 # MODEL LOADING (once per process)
 # ============================================================
 
+REMOTE_SPACE = "adwitiya1221/local-llm-reliability-gate"
+REMOTE_API_NAME = "/evaluate"
+
+
+class RemoteGate:
+    """Thin adapter preserving the original Streamlit UI while using hosted inference."""
+
+    def __init__(self):
+        token = None
+        try:
+            token = st.secrets.get("HF_READ_TOKEN")
+        except Exception:
+            token = None
+
+        self.client = Client(REMOTE_SPACE, token=token or None, verbose=False)
+        self.threshold = None
+        self.calibrated = False
+        self.calibration_note = (
+            "The hosted reliability gate reports calibration status after the first completed question."
+        )
+        self.llm = SimpleNamespace(device=SimpleNamespace(type="remote"))
+
+    def predict(
+        self,
+        question: str,
+        return_all_answers: bool = True,
+        *,
+        progress_callback=None,
+        should_cancel=None,
+    ):
+        question = str(question or "").strip()
+        if not question:
+            raise ValueError("Question must not be empty.")
+
+        response = self.client.predict(question, api_name=REMOTE_API_NAME)
+        if not isinstance(response, (list, tuple)) or len(response) != 4:
+            raise ValueError(
+                "The hosted inference API returned an unexpected response shape. "
+                "Expected decision, answer, report, and sampled answers."
+            )
+
+        decision_markdown, answer, details, sampled_answers = response
+        if not isinstance(details, dict):
+            raise ValueError("The hosted inference API did not return a JSON reliability report.")
+
+        required = {
+            "decision",
+            "classifier_score_percent",
+            "trust_threshold_percent",
+            "calibration_valid",
+            "calibration_note",
+            "reliability_reported",
+            "answer_agreement",
+            "consensus_margin",
+            "answer_key_entropy",
+            "mean_logprob_avg",
+            "min_logprob_avg",
+            "independent_verification",
+            "safety_checks",
+        }
+        missing = sorted(required - set(details))
+        if missing:
+            raise ValueError(
+                "The hosted inference API is missing required metrics: " + ", ".join(missing)
+            )
+
+        verification = details["independent_verification"]
+        safety = details["safety_checks"]
+        if not isinstance(verification, dict) or not isinstance(safety, dict):
+            raise ValueError("The hosted inference API returned malformed verification details.")
+
+        samples = [str(item) for item in (sampled_answers or [])]
+        if len(samples) != N_SAMPLES:
+            raise ValueError(
+                f"The hosted service returned {len(samples)} samples; expected {N_SAMPLES}."
+            )
+
+        probability = float(details["classifier_score_percent"]) / 100.0
+        threshold = float(details["trust_threshold_percent"]) / 100.0
+        if not (math.isfinite(probability) and 0.0 <= probability <= 1.0):
+            raise ValueError("The hosted classifier score is invalid.")
+        if not (math.isfinite(threshold) and 0.0 <= threshold <= 1.0):
+            raise ValueError("The hosted trust threshold is invalid.")
+
+        decision = str(details["decision"]).strip().upper()
+        if decision not in {"TRUST", "VERIFY"}:
+            decision = "VERIFY"
+
+        self.threshold = threshold
+        self.calibrated = bool(details["calibration_valid"])
+        self.calibration_note = str(details.get("calibration_note") or "")
+
+        state = process_state()
+        state.update(
+            loaded=True,
+            error=None,
+            runtime="Hugging Face ZeroGPU · Qwen3-0.6B",
+            threshold=threshold,
+            calibrated=self.calibrated,
+            calibration_note=self.calibration_note,
+        )
+
+        return SimpleNamespace(
+            question=question,
+            answer=str(answer or ""),
+            probability_correct=probability,
+            decision=decision,
+            threshold=threshold,
+            answer_agreement=float(details["answer_agreement"]),
+            consensus_margin=float(details["consensus_margin"]),
+            answer_key_entropy=float(details["answer_key_entropy"]),
+            mean_logprob_avg=float(details["mean_logprob_avg"]),
+            min_logprob_avg=float(details["min_logprob_avg"]),
+            raw_answers=samples if return_all_answers else [],
+            calibrated=self.calibrated,
+            calibration_note=self.calibration_note,
+            reliability_reported=bool(details["reliability_reported"]),
+            fact_verification_status=str(verification.get("status", "UNVERIFIED")),
+            fact_verification_supported=bool(verification.get("supported", False)),
+            fact_verification_reason=str(verification.get("reason") or ""),
+            fact_verification_evidence=str(verification.get("evidence") or ""),
+            fact_verification_source_url=str(verification.get("source_url") or ""),
+            material_disagreement=bool(safety.get("material_disagreement", True)),
+            nonanswer_majority=bool(safety.get("nonanswer_majority", True)),
+            useful_samples=int(safety.get("useful_samples", 0)),
+            quality_ok=bool(details.get("response_quality_passed", False)),
+            quality_reason=str(details.get("response_quality_reason") or ""),
+            question_kind=str(details.get("question_kind") or "unsupported"),
+            user_message=str(decision_markdown or ""),
+        )
+
+
 @st.cache_resource(show_spinner=False)
 def load_gate():
-    # Imported here, not at module level: this pulls in torch + transformers.
-    from src.gate.reliability_gate import ReliabilityGate
-
-    return ReliabilityGate()
+    return RemoteGate()
 
 
-def try_load_gate() -> tuple[ReliabilityGate | None, dict | None]:
-    """Load the gate; on failure return a friendly message instead of a traceback."""
+def try_load_gate() -> tuple[RemoteGate | None, dict | None]:
+    """Initialize the hosted API client; model inference runs in the Hugging Face Space."""
     try:
         return load_gate(), None
-    except FileNotFoundError as exc:
-        logger.exception("Reliability model file missing")
-        return None, {
-            "title": "Reliability model not found",
-            "body": (
-                "The trained gate file could not be found. Generate a compatible "
-                "V5 artifact through the supported benchmark and calibration workflow."
-            ),
-            "detail": f"{type(exc).__name__}: {exc}",
-        }
-    except ValueError as exc:
-        logger.exception("Reliability model file invalid")
-        return None, {
-            "title": "Reliability model is invalid",
-            "body": (
-                "The gate file was found but is not valid or does not match "
-                "the expected 15 reliability features."
-            ),
-            "detail": f"{type(exc).__name__}: {exc}",
-        }
     except Exception as exc:
-        logger.exception("Local model failed to load")
+        logger.exception("Could not connect to hosted inference")
         return None, {
-            "title": "Local model could not be loaded",
+            "title": "Hosted inference service unavailable",
             "body": (
-                "Qwen/Qwen3-0.6B or its runtime failed to start. Check that "
-                "the model is available locally and that your CUDA setup works."
+                "Could not connect to the Hugging Face ZeroGPU Space. "
+                "Check that the Space is running and its public API is available."
             ),
             "detail": f"{type(exc).__name__}: {exc}",
         }
 
 
-def runtime_label(gate: ReliabilityGate | None) -> str:
-    """Describe the device the local LLM is actually running on."""
+def runtime_label(gate: RemoteGate | None) -> str:
+    if gate is None:
+        return "Hugging Face ZeroGPU"
     device = getattr(getattr(gate, "llm", None), "device", None)
-
-    if device is None:
-        return "Unknown"
-
     device_type = getattr(device, "type", str(device))
+    if device_type == "remote":
+        return "Hugging Face ZeroGPU · Qwen3-0.6B"
+    return "Unknown inference runtime"
 
-    if device_type == "cuda":
-        name = ""
-        if torch is not None:
-            try:
-                name = torch.cuda.get_device_name(device)
-            except Exception:
-                name = ""
-        return f"CUDA · {name}" if name else "CUDA"
-
-    return "CPU"
-
-
-# ============================================================
-# INFERENCE + RESULT VALIDATION
-# ============================================================
 
 @st.cache_resource(show_spinner=False)
 def process_state() -> dict:
-    """Status shared by every browser session of this server process."""
+    """Status shared by every browser session of this frontend process."""
     return {
         "loaded": False,
         "error": None,
         "runtime": None,
         "threshold": None,
-        # The active artifact is not considered calibrated until ReliabilityGate loads it
-        # and validates its fingerprint. File existence alone is not sufficient.
         "calibrated": False,
         "calibration_note": (
-            "Calibration has not yet been validated for the active configuration. The gate checks "
-            "the artifact fingerprint when loaded; until then, every answer is VERIFY and no "
-            "reliability score is reported."
+            "The hosted gate returns calibration status after the first completed question. "
+            "Until then, no reliability score is reported."
         ),
         "lock": threading.Lock(),
     }
 
 
 def ensure_gate():
-    """Load (once per process, cached) and record real status. Called on first click only."""
-    global torch
+    """Connect to the hosted inference API. The Qwen model stays on Hugging Face."""
     state = process_state()
-    gate, err = try_load_gate()
+    gate, error = try_load_gate()
     if gate is None:
-        state.update(loaded=False, error=err)
-        return None, err
-    try:
-        import torch as _torch
+        state.update(loaded=False, error=error)
+        return None, error
 
-        torch = _torch
-    except Exception:
-        pass
     state.update(
         loaded=True,
         error=None,
@@ -649,7 +738,6 @@ def ensure_gate():
         calibration_note=gate.calibration_note,
     )
     return gate, None
-
 
 def answer_groups(question: str, answers: list[str]) -> tuple[list[str], str, int]:
     """Group samples with the gate's conservative equivalence rule."""
@@ -852,12 +940,17 @@ def run_with_stage_hooks(gate: ReliabilityGate, question: str, on_stage, on_prog
 
 def load_and_run(gate_was_loaded: bool, question: str, on_stage, on_progress=None):
     if not gate_was_loaded:
-        on_stage(f"Loading local model: {MODEL_NAME.split('/')[-1]}")
+        on_stage(f"Connecting to hosted inference: {MODEL_NAME.split('/')[-1]}")
     gate, error = ensure_gate()
     if gate is None:
         return None, error, None
-    return gate, None, run_with_stage_hooks(gate, question, on_stage, on_progress)
 
+    # The Hugging Face endpoint runs sampling, feature extraction, classification,
+    # and independent verification. This UI waits for that complete server-side job.
+    on_stage("Running hosted reliability gate")
+    result = run_check(gate, question)
+    on_stage("Finalizing the recommendation")
+    return gate, None, result
 
 def acquire_run_lock(state: dict, on_wait, timeout: float = 240.0) -> bool:
     """Wait (instead of failing) while another session's check finishes."""
@@ -880,10 +973,10 @@ def acquire_run_lock(state: dict, on_wait, timeout: float = 240.0) -> bool:
 
 def hero_html(status: str, runtime: str | None = None) -> str:
     labels = {
-        "online": ("LOCAL MODEL • ONLINE", ""),
-        "loading": ("LOCAL MODEL • LOADING", "loading"),
-        "idle": ("MODEL LOADS ON FIRST QUESTION", "loading"),
-        "offline": ("LOCAL MODEL • OFFLINE", "off"),
+        "online": ("HOSTED MODEL • ONLINE", ""),
+        "loading": ("HOSTED INFERENCE • WAITING", "loading"),
+        "idle": ("HOSTED INFERENCE ON DEMAND", "loading"),
+        "offline": ("HOSTED INFERENCE • OFFLINE", "off"),
     }
     label, dot_class = labels[status]
 
@@ -909,7 +1002,7 @@ def hero_html(status: str, runtime: str | None = None) -> str:
             <div>
                 <div class="eyebrow">AI Reliability Platform</div>
                 <div class="title">Local LLM Reliability Gate</div>
-                <div class="subtitle">Know when to trust a local model — and when to verify.</div>
+                <div class="subtitle">Know when to trust an answer — and when to verify.</div>
             </div>
         </div>
         <div class="status-row">
@@ -935,8 +1028,8 @@ def calibration_banner_html(loaded: bool, calibrated: bool, note: str) -> str:
     if not loaded:
         return notice_html(
             "info",
-            "Model not loaded yet",
-            "The local model loads automatically when you check your first question.",
+            "Hosted service not contacted yet",
+            "The hosted Qwen service is contacted when you check your first question.",
         )
     if not calibrated:
         return notice_html("warn", "Calibration refresh required", note)
@@ -955,7 +1048,7 @@ def loading_html(
 ) -> str:
     """Show a result-shaped preparation card and the live inference pipeline."""
     steps = (
-        ("Load model", "waking up the local Qwen model"),
+        ("Load model", "connecting to the hosted Qwen service"),
         ("Sample answers", "writing independent answers"),
         ("Measure agreement", "comparing answers and token confidence"),
         ("Verify independently", "checking math and capital cities"),
@@ -1507,7 +1600,7 @@ def samples_html(view: dict) -> str:
 
 def technical_html(view: dict) -> str:
     items = [
-        ("Local model", MODEL_NAME),
+        ("Hosted model", MODEL_NAME),
         ("Number of samples", str(N_SAMPLES)),
         ("Trust threshold", f"{view['threshold']:.2f} ({pct_plain(view['threshold'])}%)"),
         ("Reliability model", "ExtraTrees (calibrated for current settings)" if view.get("calibrated", True) else "ExtraTrees (NOT calibrated for current settings)"),
@@ -1578,7 +1671,7 @@ def sidebar_html(threshold: float | None, history: list[dict]) -> str:
     return f"""
     <div class="eyebrow">About the system</div>
     <div class="side-text">
-        This system runs a small local LLM, samples multiple answers, extracts uncertainty
+        This system calls a hosted Qwen model, samples multiple answers, extracts uncertainty
         signals, and uses a calibrated reliability model to decide whether the answer should
         be trusted or verified.
     </div>
@@ -1825,7 +1918,7 @@ if run_clicked:
                     if live["done"] and active == 1:
                         detail = f"Still working · {live['done']} of {N_SAMPLES} answers written."
                     else:
-                        detail = "Still working · local inference can take a while."
+                        detail = "Still working · hosted inference can take a while."
                     status_slot.markdown(
                         html_block(
                             loading_html(
@@ -1875,7 +1968,7 @@ if run_clicked:
                     st.session_state["result"] = None
 
                     if "out of memory" in str(exc).lower():
-                        title = "GPU memory is full"
+                        title = "Hosted inference unavailable"
                         body = (
                             "The 4 GB GPU ran out of memory during generation. Close other "
                             "GPU-heavy applications and try again."
@@ -1922,7 +2015,7 @@ if run_clicked:
                             notice_html(
                                 "error",
                                 (load_error or {}).get("title", "Model unavailable"),
-                                (load_error or {}).get("body", "The local model is not available."),
+                                (load_error or {}).get("body", "The hosted inference service is not available."),
                             )
                         ),
                         unsafe_allow_html=True,
@@ -1997,6 +2090,6 @@ else:
         render(technical_html(current))
 
 render(
-    '<div class="foot">Everything runs locally · Reliability is an estimate, '
+    '<div class="foot">Hosted model inference · Reliability is an estimate, '
     "not a guarantee of truth</div>"
 )
