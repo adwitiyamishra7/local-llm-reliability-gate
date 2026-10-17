@@ -195,7 +195,7 @@ html, body, .stApp {
 #MainMenu, footer { visibility: hidden; }
 [data-testid="InputInstructions"] { display: none; }
 [data-testid="stAppDeployButton"], .stAppDeployButton, .stDeployButton, [data-testid="stDeployButton"] { display: none !important; }
-.block-container { position: relative; z-index: 1; max-width: 1180px; padding: .9rem 1.4rem 2rem; }
+.block-container { position: relative; z-index: 1; max-width: 1180px; padding: 3.6rem 1.4rem 2rem; }
 * { scrollbar-color: var(--border) var(--bg); }
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-track { background: var(--track); }
